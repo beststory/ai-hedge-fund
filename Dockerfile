@@ -15,5 +15,8 @@ RUN poetry config virtualenvs.create false \
 # Copy rest of the source code
 COPY . /app/
 
+# Add the app directory to the Python path
+ENV PYTHONPATH=/app
+
 # Default command (will be overridden by Docker Compose)
 CMD ["python", "src/main.py"] 

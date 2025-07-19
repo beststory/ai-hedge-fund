@@ -43,7 +43,6 @@ INITIAL_AMOUNT="100000.0"
 MARGIN_REQUIREMENT="0.0"
 SHOW_REASONING=""
 COMMAND=""
-MODEL_NAME=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -53,11 +52,11 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --start-date)
-      START_DATE="--start-date $2"
+      START_DATE="$2"
       shift 2
       ;;
     --end-date)
-      END_DATE="--end-date $2"
+      END_DATE="$2"
       shift 2
       ;;
     --initial-cash)
@@ -118,9 +117,9 @@ fi
 
 # Determine which Docker Compose command to use
 if command -v docker-compose &> /dev/null; then
-  COMPOSE_CMD="docker-compose"
+  COMPOSE_CMD="sudo docker-compose"
 else
-  COMPOSE_CMD="docker compose"
+  COMPOSE_CMD="sudo docker compose"
 fi
 
 # Detect system architecture for GPU configuration
@@ -139,7 +138,7 @@ fi
 
 # Build the Docker image if 'build' command is provided
 if [ "$COMMAND" = "build" ]; then
-  docker build -t ai-hedge-fund .
+  sudo docker build -t ai-hedge-fund .
   exit 0
 fi
 
@@ -151,11 +150,11 @@ if [ "$COMMAND" = "ollama" ]; then
   # Check if Ollama is running
   echo "Waiting for Ollama to start..."
   for i in {1..30}; do
-    if docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
+    if sudo docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
       echo "Ollama is now running."
       # Show available models
       echo "Available models:"
-      docker exec -t ollama ollama list
+      sudo docker exec -t ollama ollama list
       
       echo -e "\nManage your models using:"
       echo "  ./run.sh pull <model-name>   # Download a model"
@@ -185,7 +184,7 @@ if [ "$COMMAND" = "pull" ]; then
   # Wait for Ollama to start
   echo "Ensuring Ollama is running..."
   for i in {1..30}; do
-    if docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
+    if sudo docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
       echo "Ollama is running."
       break
     fi
@@ -198,10 +197,10 @@ if [ "$COMMAND" = "pull" ]; then
   echo "This may take some time depending on the model size and your internet connection."
   echo "You can press Ctrl+C to cancel at any time (the model will continue downloading in the background)."
   
-  docker exec -t ollama ollama pull "$MODEL_NAME"
+  sudo docker exec -t ollama ollama pull "$MODEL_NAME"
   
   # Check if the model was successfully pulled
-  if docker exec -t ollama ollama list | grep -q "$MODEL_NAME"; then
+  if sudo docker exec -t ollama ollama list | grep -q "$MODEL_NAME"; then
     echo "Model $MODEL_NAME was successfully downloaded."
   else
     echo "Warning: Model $MODEL_NAME may not have been properly downloaded."
@@ -253,11 +252,11 @@ if [ -n "$USE_OLLAMA" ]; then
   # Wait for Ollama to start
   echo "Waiting for Ollama to start..."
   for i in {1..30}; do
-    if docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
+    if sudo docker run --rm --network=host curlimages/curl:latest curl -s http://localhost:11434/api/version &> /dev/null; then
       echo "Ollama is running."
       # Show available models
       echo "Available models:"
-      docker exec -t ollama ollama list
+      sudo docker exec -t ollama ollama list
       break
     fi
     echo -n "."
@@ -265,9 +264,9 @@ if [ -n "$USE_OLLAMA" ]; then
   done
   
   # Build the AI Hedge Fund image if needed
-  if [[ "$(docker images -q ai-hedge-fund 2> /dev/null)" == "" ]]; then
+  if [[ "$(sudo docker images -q ai-hedge-fund 2> /dev/null)" == "" ]]; then
     echo "Building AI Hedge Fund image..."
-    docker build -t ai-hedge-fund .
+    sudo docker build -t ai-hedge-fund .
   fi
   
   # Create command override for Docker Compose
@@ -307,12 +306,13 @@ if [ -n "$USE_OLLAMA" ]; then
 fi
 
 # Standard Docker run (without Ollama)
-# Build the command
-CMD="docker run -it --rm -v $(pwd)/.env:/app/.env"
+# Build the command as an array
+CMD=("sudo" "docker" "run" "--rm" "-v" "$(pwd)/.env:/app/.env" "ai-hedge-fund" "python" "$SCRIPT_PATH" "--ticker" "$TICKER" "--non-interactive")
 
-# Add the command
-CMD="$CMD ai-hedge-fund python $SCRIPT_PATH --ticker $TICKER $START_DATE $END_DATE $INITIAL_PARAM --margin-requirement $MARGIN_REQUIREMENT $SHOW_REASONING"
+if [ -n "$SHOW_REASONING" ]; then
+  CMD+=("--show-reasoning")
+fi
 
 # Run the command
-echo "Running: $CMD"
-$CMD 
+echo "Running: ${CMD[@]}"
+"${CMD[@]}"

@@ -2,6 +2,7 @@ import datetime
 import os
 import pandas as pd
 import requests
+import yfinance as yf
 
 from src.data.cache import get_cache
 from src.data.models import (
@@ -298,3 +299,41 @@ def prices_to_df(prices: list[Price]) -> pd.DataFrame:
 def get_price_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     prices = get_prices(ticker, start_date, end_date)
     return prices_to_df(prices)
+
+
+def get_fred_data(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Fetch FRED data from cache or yfinance."""
+    cache_key = f"fred_{symbol}_{start_date}_{end_date}"
+    if cached_data := _cache.get(cache_key):
+        return pd.DataFrame(cached_data)
+
+    try:
+        data = yf.download(symbol, start=start_date, end=end_date)
+        if data.empty:
+            return pd.DataFrame()
+
+        # Cache the data
+        _cache.set(cache_key, data.to_dict("records"))
+        return data
+    except Exception as e:
+        print(f"Error fetching FRED data for {symbol}: {e}")
+        return pd.DataFrame()
+
+
+def get_vix(start_date: str, end_date: str) -> pd.DataFrame:
+    """Get VIX data."""
+    return get_fred_data("^VIX", start_date, end_date)
+
+
+def get_treasury_yield(start_date: str, end_date: str) -> pd.DataFrame:
+    """Get 10-Year Treasury Yield data."""
+    return get_fred_data("^TNX", start_date, end_date)
+
+
+def get_unemployment_rate(start_date: str, end_date: str) -> pd.DataFrame:
+    """Get Unemployment Rate data."""
+    return get_fred_data("UNRATE", start_date, end_date)

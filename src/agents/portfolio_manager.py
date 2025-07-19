@@ -24,9 +24,10 @@ class PortfolioManagerOutput(BaseModel):
 def portfolio_management_agent(state: AgentState):
     """Makes final trading decisions and generates orders for multiple tickers"""
 
-    # Get the portfolio and analyst signals
+    # Get the portfolio, analyst signals, and market regime
     portfolio = state["data"]["portfolio"]
     analyst_signals = state["data"]["analyst_signals"]
+    market_regime = state["data"].get("market_regime", {"regime": "Neutral", "reasoning": "Data not available."})
     tickers = state["data"]["tickers"]
 
     # Get position limits, current prices, and signals for every ticker
@@ -64,6 +65,7 @@ def portfolio_management_agent(state: AgentState):
         current_prices=current_prices,
         max_shares=max_shares,
         portfolio=portfolio,
+        market_regime=market_regime,
         model_name=state["metadata"]["model_name"],
         model_provider=state["metadata"]["model_provider"],
     )
@@ -90,6 +92,7 @@ def generate_trading_decision(
     current_prices: dict[str, float],
     max_shares: dict[str, int],
     portfolio: dict[str, float],
+    market_regime: dict[str, str],
     model_name: str,
     model_provider: str,
 ) -> PortfolioManagerOutput:
@@ -100,6 +103,14 @@ def generate_trading_decision(
             (
                 "system",
                 """You are a portfolio manager making final trading decisions based on multiple tickers.
+
+              **Current Market Regime: {market_regime}**
+
+              Based on the current market regime, you should dynamically adjust your strategy:
+              - **Bullish**: Favor growth-oriented (e.g., Peter Lynch) and momentum-based (e.g., Technicals) signals. Be more aggressive with position sizing.
+              - **Bearish**: Favor value-investing (e.g., Warren Buffett) and risk-averse signals. Be more conservative, consider holding cash, or take short positions.
+              - **Neutral**: Take a balanced approach, weighing all analyst signals more evenly.
+              - **High-Volatility**: Prioritize risk management. Reduce position sizes, tighten stop-losses (implicitly), and be cautious. Value and fundamental signals might be more reliable than technicals.
 
               Trading Rules:
               - For long positions:
@@ -126,18 +137,21 @@ def generate_trading_decision(
               - "hold": No action
 
               Inputs:
-              - signals_by_ticker: dictionary of ticker → signals
-              - max_shares: maximum shares allowed per ticker
-              - portfolio_cash: current cash in portfolio
-              - portfolio_positions: current positions (both long and short)
-              - current_prices: current prices for each ticker
-              - margin_requirement: current margin requirement for short positions (e.g., 0.5 means 50%)
-              - total_margin_used: total margin currently in use
+              - signals_by_ticker: dictionary of ticker → signals from different analyst agents.
+              - max_shares: maximum shares allowed per ticker based on risk limits.
+              - portfolio_cash: current cash in portfolio.
+              - portfolio_positions: current positions (both long and short).
+              - current_prices: current prices for each ticker.
+              - margin_requirement: current margin requirement for short positions (e.g., 0.5 means 50%).
+              - total_margin_used: total margin currently in use.
               """,
             ),
             (
                 "human",
-                """Based on the team's analysis, make your trading decisions for each ticker.
+                """Based on the team's analysis and the current market regime, make your trading decisions for each ticker.
+
+              Market Regime Analysis:
+              {market_regime_reasoning}
 
               Here are the signals by ticker:
               {signals_by_ticker}
@@ -176,6 +190,8 @@ def generate_trading_decision(
     # Generate the prompt
     prompt = template.invoke(
         {
+            "market_regime": market_regime.get("regime", "Neutral"),
+            "market_regime_reasoning": market_regime.get("reasoning", "Not available."),
             "signals_by_ticker": json.dumps(signals_by_ticker, indent=2),
             "current_prices": json.dumps(current_prices, indent=2),
             "max_shares": json.dumps(max_shares, indent=2),
