@@ -1,4 +1,4 @@
-"""블로그 글에서 투자 인사이트 메타데이터 추출"""
+"""블로그 글에서 투자 인사이트 메타데이터 추출 (테스트용 - 5개만)"""
 import json
 import os
 from typing import List, Dict
@@ -46,10 +46,10 @@ JSON 형식으로 응답하세요."""
     try:
         logger.info(f"[{index}/{total}] 메타데이터 추출 중: {title[:50]}...")
 
-        # LLM 호출 (Ollama 로컬 사용)
+        # LLM 호출 (Ollama 로컬 사용 - Mistral Small 3.1)
         metadata = call_llm(
             prompt=prompt,
-            model_name="gpt-oss:latest",
+            model_name="mistral-small3.1",
             model_provider=ModelProvider.OLLAMA,
             pydantic_model=InsightMetadata
         )
@@ -73,77 +73,52 @@ JSON 형식으로 응답하세요."""
         }
 
 
-def convert_to_investment_insights(raw_posts: List[Dict], output_file: str):
-    """크롤링 데이터를 investment_insights.json 형식으로 변환"""
-    logger.info(f"\n" + "=" * 80)
-    logger.info(f"투자 인사이트 메타데이터 추출 시작")
-    logger.info(f"  - 입력: {len(raw_posts)}개 글")
-    logger.info(f"  - 출력: {output_file}")
-    logger.info(f"=" * 80 + "\n")
-
-    insights = []
-    failed_count = 0
-
-    for i, post in enumerate(raw_posts, 1):
-        try:
-            # 메타데이터 추출
-            metadata = extract_metadata_from_post(post, i, len(raw_posts))
-
-            # 본문 요약 (처음 500자)
-            content_summary = post['content'][:500].strip()
-            if len(post['content']) > 500:
-                content_summary += "..."
-
-            # 투자 인사이트 형식으로 변환
-            insight = {
-                "id": i,
-                "date": post['date'],
-                "title": post['title'],
-                "content": content_summary,
-                "sector": metadata['sector'],
-                "sentiment": metadata['sentiment'],
-                "keywords": metadata['keywords'],
-                "url": post['url']
-            }
-
-            insights.append(insight)
-
-        except Exception as e:
-            logger.error(f"[{i}/{len(raw_posts)}] 변환 실패: {e}")
-            failed_count += 1
-
-    # JSON 저장
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(insights, f, ensure_ascii=False, indent=2)
-
-    logger.info(f"\n" + "=" * 80)
-    logger.info(f"✅ 변환 완료!")
-    logger.info(f"  - 성공: {len(insights)}개")
-    logger.info(f"  - 실패: {failed_count}개")
-    logger.info(f"  - 저장: {output_file}")
-    logger.info(f"=" * 80)
-
-    return insights
-
-
 if __name__ == '__main__':
     # 크롤링된 원본 데이터 로드
     raw_file = "data/blog_raw_100.json"
-    output_file = "data/investment_insights_100.json"
 
     logger.info(f"원본 데이터 로드 중: {raw_file}")
     with open(raw_file, 'r', encoding='utf-8') as f:
         raw_posts = json.load(f)
 
-    logger.info(f"로드 완료: {len(raw_posts)}개 글\n")
+    # 처음 5개만 테스트
+    test_posts = raw_posts[:5]
+    logger.info(f"테스트: {len(test_posts)}개 글\n")
 
-    # 변환 실행
-    insights = convert_to_investment_insights(raw_posts, output_file)
+    logger.info(f"=" * 80)
+    logger.info(f"투자 인사이트 메타데이터 추출 시작 (테스트)")
+    logger.info(f"=" * 80 + "\n")
 
-    # 샘플 출력
+    insights = []
+    for i, post in enumerate(test_posts, 1):
+        try:
+            # 메타데이터 추출
+            metadata = extract_metadata_from_post(post, i, len(test_posts))
+
+            # 결과 저장
+            insight = {
+                "id": i,
+                "date": post['date'],
+                "title": post['title'],
+                "sector": metadata['sector'],
+                "sentiment": metadata['sentiment'],
+                "keywords": metadata['keywords'],
+            }
+
+            insights.append(insight)
+
+        except Exception as e:
+            logger.error(f"[{i}/{len(test_posts)}] 변환 실패: {e}")
+
+    logger.info(f"\n" + "=" * 80)
+    logger.info(f"✅ 테스트 완료!")
+    logger.info(f"  - 성공: {len(insights)}개")
+    logger.info(f"=" * 80)
+
+    # 결과 출력
     if insights:
-        logger.info(f"\n📝 샘플 3개:")
-        for insight in insights[:3]:
+        logger.info(f"\n📝 결과:")
+        for insight in insights:
             logger.info(f"\n{insight['id']}. {insight['title']}")
             logger.info(f"   섹터: {insight['sector']}")
             logger.info(f"   감성: {insight['sentiment']}")
