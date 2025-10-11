@@ -1,18 +1,19 @@
 """Constants and utilities related to analysts configuration."""
 
-from agents.ben_graham import ben_graham_agent
-from agents.bill_ackman import bill_ackman_agent
-from agents.cathie_wood import cathie_wood_agent
-from agents.charlie_munger import charlie_munger_agent
-from agents.fundamentals import fundamentals_agent
-from agents.michael_burry import michael_burry_agent
-from agents.phil_fisher import phil_fisher_agent
-from agents.peter_lynch import peter_lynch_agent
-from agents.sentiment import sentiment_agent
-from agents.stanley_druckenmiller import stanley_druckenmiller_agent
-from agents.technicals import technical_analyst_agent
-from agents.valuation import valuation_agent
-from agents.warren_buffett import warren_buffett_agent
+from src.agents.ben_graham import ben_graham_agent
+from src.agents.bill_ackman import bill_ackman_agent
+from src.agents.cathie_wood import cathie_wood_agent
+from src.agents.charlie_munger import charlie_munger_agent
+from src.agents.fundamentals import fundamentals_agent
+from src.agents.michael_burry import michael_burry_agent
+from src.agents.phil_fisher import phil_fisher_agent
+from src.agents.peter_lynch import peter_lynch_agent
+from src.agents.sentiment import sentiment_agent
+from src.agents.stanley_druckenmiller import stanley_druckenmiller_agent
+from src.agents.technicals import technical_analyst_agent
+from src.agents.valuation import valuation_agent
+from src.agents.warren_buffett import warren_buffett_agent
+from src.agents.macro_economic_agent import macro_economic_agent
 
 # Define analyst configuration - single source of truth
 ANALYST_CONFIG = {
@@ -80,6 +81,11 @@ ANALYST_CONFIG = {
         "display_name": "Valuation Analyst",
         "agent_func": valuation_agent,
         "order": 12,
+    },
+    "macro_economic_analyst": {
+        "display_name": "Macro Economic Analyst",
+        "agent_func": macro_economic_agent,
+        "order": 13,
     },
 }
 

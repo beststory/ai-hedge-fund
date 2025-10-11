@@ -20,7 +20,7 @@ __pycache__/
 
 # Logs and data
 logs/
-data/
+# data/  # 주석 처리: investment_insights.json 포함 필요
 *.log
 
 # OS specific

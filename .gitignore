@@ -52,3 +52,14 @@ Thumbs.db
 
 # Frontend
 node_modules
+# Virtual environment
+ai-hedge-env/
+venv/
+
+# Test outputs
+test_output.log
+*.log
+
+# Backup files
+backup_old_files/
+*.backup
