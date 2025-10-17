@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 헤지펀드 - 실시간 투자 대시보드</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131722;
+            --bg-card: #1e222d;
+            --bg-hover: #2a2e39;
+            --text-primary: #d1d4dc;
+            --text-secondary: #868b98;
+            --text-bright: #ffffff;
+            --accent-green: #26a69a;
+            --accent-red: #ef5350;
+            --accent-blue: #2962ff;
+            --border-color: #2a2e39;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        /* 헤더 */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--text-bright);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #1e4db7;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+
+        /* 메인 레이아웃 */
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr 320px;
+            height: calc(100vh - 49px);
+        }
+
+        /* 왼쪽 사이드바 */
+        .sidebar-left {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+
+        .market-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-card);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: var(--text-bright);
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--accent-blue);
+        }
+
+        .search-box {
+            padding: 10px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 12px;
+        }
+
+        .stock-list {
+            padding: 5px;
+        }
+
+        .stock-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 2px;
+        }
+
+        .stock-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .stock-item.selected {
+            background: var(--bg-hover);
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .stock-symbol {
+            font-weight: 600;
+            color: var(--text-bright);
+            font-size: 13px;
+        }
+
+        .stock-name {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .stock-price {
+            font-weight: 500;
+            font-size: 13px;
+            text-align: right;
+        }
+
+        .stock-change {
+            font-size: 11px;
+            text-align: right;
+        }
+
+        .price-up { color: var(--accent-green); }
+        .price-down { color: var(--accent-red); }
+
+        /* 중앙 메인 */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chart-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 20px;
+        }
+
+        .stock-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .stock-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .stock-title h2 {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--text-bright);
+        }
+
+        .stock-ticker {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .current-price {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .price-change {
+            font-size: 18px;
+        }
+
+        .stock-meta-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .meta-item {
+            text-align: center;
+            padding: 10px;
+            background: var(--bg-card);
+            border-radius: 6px;
+        }
+
+        .meta-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .meta-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .chart-container {
+            flex: 1;
+            padding: 20px;
+            background: var(--bg-secondary);
+            overflow-y: auto;
+        }
+
+        .chart-wrapper {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            max-height: 350px !important;
+        }
+
+        /* 포트폴리오 섹션 */
+        .portfolio-section {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="number"] {
+            flex: 1;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .portfolio-result {
+            margin-top: 15px;
+        }
+
+        .portfolio-summary {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .summary-row:last-child { border-bottom: none; }
+
+        /* 오른쪽 사이드바 */
+        .sidebar-right {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .analysis-section {
+            flex: 1;
+            overflow-y: auto;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header {
+            padding: 12px 15px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-score {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: var(--bg-card);
+            margin: 10px;
+            border-radius: 8px;
+        }
+
+        .score-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .ai-recommendation {
+            padding: 10px 15px;
+            margin: 0 10px 10px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .recommendation-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--text-bright);
+        }
+
+        .recommendation-text {
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        /* 투자 의견 표 스타일 */
+        .analysis-table {
+            width: 100%;
+            font-size: 12px;
+        }
+
+        .analysis-table tr {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .analysis-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .analysis-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .analysis-value {
+            color: var(--text-bright);
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .analysis-value.positive {
+            color: var(--accent-green);
+        }
+
+        .analysis-value.negative {
+            color: var(--accent-red);
+        }
+
+        .news-section {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .news-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .news-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .news-title {
+            font-size: 12px;
+            color: var(--text-bright);
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .news-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* 로딩 */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading i {
+            font-size: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 스크롤바 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--text-secondary); border-radius: 4px; }
+
+        /* 차트 기간 선택 버튼 */
+        .period-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+
+        .period-btn {
+            padding: 6px 12px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .period-btn.active {
+            background: var(--accent-blue);
+            color: var(--text-bright);
+            border-color: var(--accent-blue);
+        }
+
+        .period-btn:hover {
+            background: var(--bg-hover);
+        }
+
+        /* 모달 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .close {
+            color: var(--text-secondary);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .close:hover {
+            color: var(--text-bright);
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+        }
+
+        .search-input-large {
+            width: 100%;
+            padding: 15px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+
+        .search-input-large:focus {
+            border-color: var(--accent-blue);
+            outline: none;
+        }
+
+        .insight-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .insight-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 8px;
+        }
+
+        .insight-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .insight-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .insight-content:hover {
+            background: var(--bg-hover);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .insight-content.expanded {
+            max-height: none;
+        }
+
+        .expand-hint {
+            color: var(--accent-blue);
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .insight-keywords {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .keyword-tag {
+            background: var(--bg-card);
+            color: var(--accent-blue);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .similarity-badge {
+            background: var(--accent-green);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <div class="header">
+        <div class="logo"><i class="fas fa-chart-line"></i> AI 헤지펀드</div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="loadAllData()">
+                <i class="fas fa-sync"></i> 새로고침
+            </button>
+            <button class="btn" onclick="showRAGSearchModal()">
+                <i class="fas fa-search"></i> RAG 검색
+            </button>
+            <button class="btn" onclick="showPortfolioModal()">
+                <i class="fas fa-briefcase"></i> 포트폴리오 제안
+            </button>
+            <button class="btn btn-secondary" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> 로그아웃
+            </button>
+        </div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="container">
+        <!-- 왼쪽: 종목 리스트 -->
+        <div class="sidebar-left">
+            <div class="market-tabs">
+                <button class="tab active" onclick="switchMarket('ai')">AI 추천</button>
+                <button class="tab" onclick="switchMarket('kospi')">KOSPI</button>
+                <button class="tab" onclick="switchMarket('nasdaq')">NASDAQ</button>
+                <button class="tab" onclick="switchMarket('favorites')">⭐ 내 포트폴리오</button>
+            </div>
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="종목 검색..." onkeyup="filterStocks()" id="stockSearch">
+            </div>
+            <div class="stock-list" id="stockList">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>종목 로딩 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 중앙: 차트 및 상세 정보 -->
+        <div class="main-content">
+            <div class="chart-header">
+                <div class="stock-title-row">
+                    <div class="stock-title">
+                        <h2 id="selectedStockName">로딩 중...</h2>
+                        <span class="stock-ticker" id="selectedStockTicker"></span>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="showAIReasonModal()" id="aiReasonBtn" style="display: none;">
+                            <i class="fas fa-lightbulb"></i> AI 추천 이유
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadStockDetail(currentStock)">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <span class="current-price" id="currentPrice">-</span>
+                    <span class="price-change" id="priceChange">-</span>
+                </div>
+                <div class="stock-meta-row">
+                    <div class="meta-item">
+                        <div class="meta-label">1개월 수익률</div>
+                        <div class="meta-value" id="returns1m">-</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">3개월 수익률</div>
+                        <div class="meta-value" id="returns3m">-</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">변동성</div>
+                        <div class="meta-value" id="volatility">-</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">PER</div>
+                        <div class="meta-value" id="peRatio">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-wrapper">
+                    <div class="period-selector">
+                        <button class="period-btn" onclick="changeChartPeriod('1m')">1개월</button>
+                        <button class="period-btn active" onclick="changeChartPeriod('3m')">3개월</button>
+                        <button class="period-btn" onclick="changeChartPeriod('6m')">6개월</button>
+                        <button class="period-btn" onclick="changeChartPeriod('1y')">1년</button>
+                    </div>
+                    <canvas id="priceChart"></canvas>
+                </div>
+
+                <div class="portfolio-section">
+                    <div class="section-title"><i class="fas fa-briefcase"></i> 포트폴리오 제안 (빠른 생성)</div>
+                    <div class="input-group">
+                        <input type="number" id="investmentAmount" placeholder="투자 금액 (원)" value="100000000" min="1000000">
+                        <button class="btn" onclick="generatePortfolio()">생성</button>
+                    </div>
+                    <div class="portfolio-result" id="portfolioResult"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽: AI 분석 & 뉴스 -->
+        <div class="sidebar-right">
+            <div class="analysis-section">
+                <div class="section-header">
+                    <span><i class="fas fa-robot"></i> AI 분석</span>
+                </div>
+                <div class="ai-score">
+                    <div class="score-circle" id="aiScore">-</div>
+                    <div>
+                        <div class="recommendation-title" id="aiRecommendation">분석 중...</div>
+                        <div class="recommendation-text">AI가 종목을 분석하고 있습니다.</div>
+                    </div>
+                </div>
+                <div class="ai-recommendation">
+                    <div class="recommendation-title">투자 의견</div>
+                    <div class="recommendation-text" id="aiAnalysis">종목을 선택하면 AI 분석이 표시됩니다.</div>
+                </div>
+            </div>
+
+            <div class="news-section">
+                <div class="section-header">
+                    <span><i class="fas fa-newspaper"></i> 최신 뉴스</span>
+                    <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="loadNews()">
+                        <i class="fas fa-sync"></i>
+                    </button>
+                </div>
+                <div id="newsList">
+                    <div class="loading">
+                        <i class="fas fa-spinner"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAG 검색 모달 -->
+    <div id="ragSearchModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title"><i class="fas fa-search"></i> 투자 인사이트 검색</h2>
+                    <div id="ragUpdateInfo" style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+                        로딩 중...
+                    </div>
+                </div>
+                <span class="close" onclick="closeRAGSearchModal()">&times;</span>
+            </div>
+            <div class="search-container">
+                <input type="text" id="ragSearchInput" class="search-input-large"
+                       placeholder="검색어 입력 (예: 삼성전자, HBM, AI 반도체, 양자컴퓨팅)"
+                       onkeypress="if(event.key === 'Enter') searchRAGInsights()">
+                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="searchRAGInsights()">
+                    <i class="fas fa-search"></i> 검색
+                </button>
+            </div>
+            <div id="ragSearchResults"></div>
+        </div>
+    </div>
+
+    <!-- AI 추천 이유 모달 -->
+    <div id="aiRecommendationReasonModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-lightbulb"></i> AI 추천 이유</h2>
+                <span class="close" onclick="closeAIReasonModal()">&times;</span>
+            </div>
+            <div id="aiRecommendationReasonContent">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>AI 추천 이유 분석 중...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://192.168.1.3:8888';
+        let currentStock = '005930';
+        let currentMarket = 'ai';
+        let currentChartPeriod = '3m';  // 기본값: 3개월
+        let stocksData = {
+            ai: [],
+            kospi: [],
+            nasdaq: [],
+            trending: [],
+            favorites: []
+        };
+        let priceChart = null;
+        let currentMetrics = null;  // 현재 종목 metrics 저장
+        let userFavorites = [];  // 사용자 즐겨찾기 심볼 목록
+
+        // Axios interceptor: 401 에러 시 자동으로 로그인 페이지로 리다이렉트
+        axios.interceptors.response.use(
+            response => response,
+            error => {
+                if (error.response && error.response.status === 401) {
+                    console.log('❌ 인증 토큰 만료 또는 유효하지 않음 - 로그인 페이지로 이동');
+                    localStorage.removeItem('supabase_token');
+                    localStorage.removeItem('supabase_user');
+                    alert('로그인 세션이 만료되었습니다. 다시 로그인해주세요.');
+                    window.location.href = '/login';
+                    return Promise.reject(error);
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 인증 확인
+            const token = localStorage.getItem('supabase_token');
+            if (!token) {
+                console.log('❌ 인증 토큰 없음 - 로그인 페이지로 이동');
+                window.location.href = '/login';
+                return;
+            }
+
+            console.log('✅ 인증 확인 완료');
+            console.log('🚀 대시보드 초기화...');
+            loadInitialData();
+        });
+
+        // 초기 필수 데이터만 로드 (빠른 첫 화면)
+        async function loadInitialData() {
+            console.log('⚡ 필수 데이터만 빠르게 로딩...');
+
+            // 1단계: 즐겨찾기와 AI 추천만 로드 (병렬)
+            await Promise.all([
+                loadUserFavorites(),
+                loadTopStocks()
+            ]);
+
+            // 2단계: 첫 종목 표시 (화면에 뭔가 보이게)
+            if (stocksData.ai.length > 0) {
+                currentStock = stocksData.ai[0].symbol;
+                displayStockList();
+            }
+
+            console.log('✅ 초기 화면 로드 완료 (1-2초)');
+
+            // 3단계: 나머지는 백그라운드에서 천천히 로드
+            setTimeout(() => {
+                loadBackgroundData();
+            }, 100);
+        }
+
+        // 백그라운드 데이터 로드 (화면에 보이지 않아도 되는 것들)
+        async function loadBackgroundData() {
+            console.log('🔄 백그라운드 데이터 로딩...');
+
+            // 더 이상 자동으로 종목 상세 정보를 로드하지 않음
+            // 사용자가 종목을 클릭할 때만 분석 시작
+            console.log('💡 종목을 클릭하면 AI 분석이 시작됩니다');
+
+            console.log('✅ 백그라운드 로딩 완료');
+        }
+
+        // 전체 데이터 새로고침 (사용자가 명시적으로 요청한 경우)
+        async function loadAllData() {
+            console.log('🔄 전체 데이터 새로고침...');
+            await loadUserFavorites();
+            await loadTopStocks();
+            await loadStockDetail(currentStock);
+            console.log('✅ 새로고침 완료');
+        }
+
+        // 사용자 즐겨찾기 심볼 목록 로드
+        async function loadUserFavorites() {
+            try {
+                const token = localStorage.getItem('supabase_token');
+                const response = await axios.get(`${BASE_URL}/api/user/favorites`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.data.success) {
+                    userFavorites = response.data.favorites.map(f => f.symbol);
+                    console.log(`✅ 즐겨찾기 ${userFavorites.length}개 로드`);
+                }
+            } catch (error) {
+                console.error('❌ 즐겨찾기 로드 실패:', error);
+            }
+        }
+
+        // AI 추천 종목 로드
+        async function loadTopStocks() {
+            try {
+                console.log('🤖 AI 추천 종목 로딩...');
+                const response = await axios.get(`${BASE_URL}/api/top-stocks?num_stocks=10`);
+
+                if (response.data.success && response.data.stocks) {
+                    stocksData.ai = response.data.stocks.map(s => ({
+                        symbol: s.ticker,
+                        name: s.ticker,
+                        price: s.current_price,
+                        change: s.returns_1y,
+                        score: s.score
+                    }));
+
+                    // 기본 종목 설정
+                    if (stocksData.ai.length > 0 && currentMarket === 'ai') {
+                        currentStock = stocksData.ai[0].symbol;
+                    }
+
+                    displayStockList();
+                    console.log(`✅ ${stocksData.ai.length}개 추천 종목 로드 완료`);
+                }
+            } catch (error) {
+                console.error('❌ 추천 종목 로드 실패:', error);
+            }
+        }
+
+        // AI 탭용 트렌딩 종목 로드 (AI 추천과 함께 표시) - 비활성화: 초기 로딩 속도 개선
+        async function loadTrendingForAI() {
+            // 초기 로딩에서 제거 - 사용자가 원하면 나중에 추가 가능
+            console.log('🔥 트렌딩 종목은 필요 시 수동으로 로드하세요');
+        }
+
+        // 시장별 종목 리스트 표시
+        function displayStockList() {
+            const listEl = document.getElementById('stockList');
+            const stocks = stocksData[currentMarket] || [];
+
+            if (stocks.length === 0) {
+                listEl.innerHTML = '<div class="loading"><p>종목이 없습니다.</p></div>';
+                return;
+            }
+
+            listEl.innerHTML = stocks.map(stock => {
+                const isFavorite = userFavorites.includes(stock.symbol);
+                const favoriteIcon = isFavorite ? '⭐' : '☆';
+
+                return `
+                <div class="stock-item ${stock.symbol === currentStock ? 'selected' : ''}" style="display: grid; grid-template-columns: 30px 1fr auto; gap: 8px;">
+                    <div style="display: flex; align-items: center; cursor: pointer; font-size: 20px;" onclick="event.stopPropagation(); toggleFavorite('${stock.symbol}')">
+                        <span id="fav-${stock.symbol}">${favoriteIcon}</span>
+                    </div>
+                    <div onclick="selectStock('${stock.symbol}')" style="cursor: pointer;">
+                        <div class="stock-symbol">${stock.symbol}</div>
+                        <div class="stock-name">${stock.name}</div>
+                    </div>
+                    <div onclick="selectStock('${stock.symbol}')" style="cursor: pointer;">
+                        <div class="stock-price">${formatPrice(stock.price, stock.symbol)}</div>
+                        <div class="stock-change ${stock.change >= 0 ? 'price-up' : 'price-down'}">
+                            ${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // 즐겨찾기 추가/제거 토글
+        async function toggleFavorite(symbol) {
+            const token = localStorage.getItem('supabase_token');
+            const isFavorite = userFavorites.includes(symbol);
+
+            try {
+                if (isFavorite) {
+                    // 즐겨찾기 제거
+                    const response = await axios.delete(`${BASE_URL}/api/user/favorites/${symbol}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (response.data.success) {
+                        userFavorites = userFavorites.filter(s => s !== symbol);
+                        console.log(`❌ ${symbol} 즐겨찾기 제거`);
+                    }
+                } else {
+                    // 즐겨찾기 추가
+                    const response = await axios.post(`${BASE_URL}/api/user/favorites`, { symbol }, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (response.data.success) {
+                        userFavorites.push(symbol);
+                        console.log(`⭐ ${symbol} 즐겨찾기 추가`);
+                    } else {
+                        console.error('즐겨찾기 추가 실패:', response.data.message);
+                        alert(response.data.message || '즐겨찾기 추가에 실패했습니다.');
+                        return;
+                    }
+                }
+
+                // 별 아이콘 업데이트 (현재 탭)
+                const favIcon = document.getElementById(`fav-${symbol}`);
+                if (favIcon) {
+                    favIcon.textContent = userFavorites.includes(symbol) ? '⭐' : '☆';
+                }
+
+                // 즐겨찾기 목록 강제 새로고침 (캐시 우회)
+                await loadUserFavorites();
+
+                // stocksData.favorites 백그라운드 업데이트 (조용히)
+                await updateFavoritesData();
+
+                // 내 포트폴리오 탭이면 화면도 새로고침
+                if (currentMarket === 'favorites') {
+                    displayStockList();
+                }
+
+                console.log(`✅ 즐겨찾기 업데이트 완료: ${userFavorites.length}개`);
+            } catch (error) {
+                console.error('❌ 즐겨찾기 토글 실패:', error);
+                if (error.response && error.response.status === 401) {
+                    // 401 에러는 interceptor에서 처리됨
+                    return;
+                }
+                alert('즐겨찾기 처리에 실패했습니다.');
+            }
+        }
+
+        // 즐겨찾기 데이터만 조용히 업데이트 (UI 변경 없음)
+        async function updateFavoritesData() {
+            try {
+                const token = localStorage.getItem('supabase_token');
+                const response = await axios.get(`${BASE_URL}/api/user/favorites`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.data.success && response.data.favorites) {
+                    stocksData.favorites = response.data.favorites.map(f => ({
+                        symbol: f.symbol,
+                        name: f.company_name || f.symbol,
+                        price: f.current_price,
+                        change: f.returns_1y || 0,
+                        score: f.score || 0
+                    }));
+                    console.log(`🔄 stocksData.favorites 업데이트 완료 (${stocksData.favorites.length}개)`);
+                }
+            } catch (error) {
+                console.error('❌ 즐겨찾기 데이터 업데이트 실패:', error);
+            }
+        }
+
+        // KOSPI 종목 실시간 로드
+        async function loadKospiStocks() {
+            // KOSPI 주요 종목 30개 (시가총액 순)
+            const kospiSymbols = [
+                '005930', // 삼성전자
+                '000660', // SK하이닉스
+                '207940', // 삼성바이오로직스
+                '005380', // 현대차
+                '035720', // 카카오
+                '051910', // LG화학
+                '006400', // 삼성SDI
+                '035420', // NAVER
+                '000270', // 기아
+                '068270', // 셀트리온
+                '105560', // KB금융
+                '055550', // 신한지주
+                '012330', // 현대모비스
+                '028260', // 삼성물산
+                '066570', // LG전자
+                '096770', // SK이노베이션
+                '003550', // LG
+                '017670', // SK텔레콤
+                '032830', // 삼성생명
+                '009150', // 삼성전기
+                '015760', // 한국전력
+                '033780', // KT&G
+                '011170', // 롯데케미칼
+                '010950', // S-Oil
+                '316140', // 우리금융지주
+                '086790', // 하나금융지주
+                '018260', // 삼성에스디에스
+                '009540', // 한국조선해양
+                '034730', // SK
+                '000810'  // 삼성화재
+            ];
+
+            const loadingEl = document.getElementById('stockList');
+            loadingEl.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>KOSPI 30개 종목 로딩 중...</p></div>';
+
+            console.log(`🔄 KOSPI ${kospiSymbols.length}개 종목 실시간 로드 시작...`);
+
+            const promises = kospiSymbols.map(async symbol => {
+                try {
+                    const response = await axios.post(`${BASE_URL}/api/analyze`, { symbol });
+                    if (response.data.success) {
+                        const metrics = response.data.metrics;
+                        return {
+                            symbol: symbol,
+                            name: response.data.company_name || symbol,
+                            price: metrics.current_price,
+                            change: metrics.returns_1y || 0,
+                            score: 80
+                        };
+                    }
+                } catch (error) {
+                    console.error(`${symbol} 로드 실패:`, error);
+                }
+                return null;
+            });
+
+            const results = await Promise.all(promises);
+            stocksData.kospi = results.filter(r => r !== null);
+            displayStockList();
+            console.log(`✅ KOSPI ${stocksData.kospi.length}개 종목 로드 완료`);
+        }
+
+        // NASDAQ 종목 실시간 로드
+        async function loadNasdaqStocks() {
+            // NASDAQ 주요 종목 25개 (시가총액 순)
+            const nasdaqSymbols = [
+                'AAPL',  // Apple
+                'MSFT',  // Microsoft
+                'GOOGL', // Alphabet
+                'AMZN',  // Amazon
+                'NVDA',  // NVIDIA
+                'META',  // Meta
+                'TSLA',  // Tesla
+                'AVGO',  // Broadcom
+                'COST',  // Costco
+                'NFLX',  // Netflix
+                'AMD',   // AMD
+                'PEP',   // PepsiCo
+                'CSCO',  // Cisco
+                'ADBE',  // Adobe
+                'INTC',  // Intel
+                'CMCSA', // Comcast
+                'TXN',   // Texas Instruments
+                'QCOM',  // Qualcomm
+                'MU',    // Micron Technology
+                'AMGN',  // Amgen
+                'HON',   // Honeywell
+                'SBUX',  // Starbucks
+                'GILD',  // Gilead
+                'AMAT',  // Applied Materials
+                'ADI'    // Analog Devices
+            ];
+
+            const loadingEl = document.getElementById('stockList');
+            loadingEl.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>NASDAQ 25개 종목 로딩 중...</p></div>';
+
+            console.log(`🔄 NASDAQ ${nasdaqSymbols.length}개 종목 실시간 로드 시작...`);
+
+            const promises = nasdaqSymbols.map(async symbol => {
+                try {
+                    const response = await axios.post(`${BASE_URL}/api/analyze`, { symbol });
+                    if (response.data.success) {
+                        const metrics = response.data.metrics;
+                        return {
+                            symbol: symbol,
+                            name: response.data.company_name || symbol,
+                            price: metrics.current_price,
+                            change: metrics.returns_1y || 0,
+                            score: 85
+                        };
+                    }
+                } catch (error) {
+                    console.error(`${symbol} 로드 실패:`, error);
+                }
+                return null;
+            });
+
+            const results = await Promise.all(promises);
+            stocksData.nasdaq = results.filter(r => r !== null);
+            displayStockList();
+            console.log(`✅ NASDAQ ${stocksData.nasdaq.length}개 종목 로드 완료`);
+        }
+
+        // 트렌딩 종목 실시간 로드
+        async function loadTrendingStocks() {
+            const loadingEl = document.getElementById('stockList');
+            loadingEl.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>🔥 트렌딩 종목 로딩 중 (15-20초)...</p></div>';
+
+            console.log('🔥 트렌딩 종목 실시간 로드 시작...');
+
+            try {
+                const response = await axios.get(`${BASE_URL}/api/trending-stocks?min_score=40&top_n=15`);
+
+                if (response.data.success && response.data.stocks) {
+                    stocksData.trending = response.data.stocks.map(s => ({
+                        symbol: s.ticker,
+                        name: `${s.name}`,
+                        price: s.current_price,
+                        change: s.returns_1m,
+                        score: s.trending_score,
+                        theme: s.theme,
+                        risk: s.risk_level
+                    }));
+
+                    displayStockList();
+                    console.log(`✅ 트렌딩 ${stocksData.trending.length}개 종목 로드 완료`);
+
+                    // 테마별 통계 출력
+                    const themes = response.data.themes;
+                    console.log(`   테마: ${Object.keys(themes).join(', ')}`);
+                } else {
+                    loadingEl.innerHTML = '<div class="loading"><p>트렌딩 종목을 찾을 수 없습니다.</p></div>';
+                }
+            } catch (error) {
+                console.error('❌ 트렌딩 종목 로드 실패:', error);
+                loadingEl.innerHTML = '<div class="loading"><p style="color: var(--accent-red);">로드 실패</p></div>';
+            }
+        }
+
+        // 즐겨찾기 종목 로드
+        async function loadFavorites() {
+            const loadingEl = document.getElementById('stockList');
+            loadingEl.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>⭐ 내 즐겨찾기 로딩 중...</p></div>';
+
+            console.log('⭐ 즐겨찾기 종목 로드 시작...');
+
+            try {
+                const token = localStorage.getItem('supabase_token');
+                const response = await axios.get(`${BASE_URL}/api/user/favorites`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.data.success && response.data.favorites) {
+                    stocksData.favorites = response.data.favorites.map(f => ({
+                        symbol: f.symbol,
+                        name: f.company_name || f.symbol,
+                        price: f.current_price,
+                        change: f.returns_1y || 0,
+                        score: f.score || 0
+                    }));
+
+                    displayStockList();
+                    console.log(`✅ 즐겨찾기 ${stocksData.favorites.length}개 종목 로드 완료`);
+
+                    if (stocksData.favorites.length === 0) {
+                        loadingEl.innerHTML = '<div class="loading"><p style="color: var(--text-secondary);">⭐ 즐겨찾기한 종목이 없습니다.<br><br>다른 탭에서 별 아이콘을 클릭하여<br>종목을 즐겨찾기에 추가하세요!</p></div>';
+                    }
+                } else {
+                    loadingEl.innerHTML = '<div class="loading"><p style="color: var(--text-secondary);">즐겨찾기를 불러올 수 없습니다.</p></div>';
+                }
+            } catch (error) {
+                console.error('❌ 즐겨찾기 로드 실패:', error);
+                loadingEl.innerHTML = '<div class="loading"><p style="color: var(--accent-red);">로드 실패</p></div>';
+            }
+        }
+
+        // 시장 전환
+        async function switchMarket(market) {
+            currentMarket = market;
+
+            // 탭 활성화
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // KOSPI/NASDAQ/트렌딩/즐겨찾기는 실시간 데이터 로드
+            if (market === 'kospi') {
+                if (stocksData.kospi.length === 0) {
+                    await loadKospiStocks();
+                } else {
+                    displayStockList();
+                }
+            } else if (market === 'nasdaq') {
+                if (stocksData.nasdaq.length === 0) {
+                    await loadNasdaqStocks();
+                } else {
+                    displayStockList();
+                }
+            } else if (market === 'trending') {
+                if (stocksData.trending.length === 0) {
+                    await loadTrendingStocks();
+                } else {
+                    displayStockList();
+                }
+            } else if (market === 'favorites') {
+                await loadFavorites();
+            } else {
+                displayStockList();
+            }
+        }
+
+        // 종목 선택
+        async function selectStock(symbol) {
+            currentStock = symbol;
+            displayStockList();
+
+            // 로딩 시작 표시
+            showLoadingIndicator(symbol);
+
+            // 분석 시작
+            await loadStockDetail(symbol);
+        }
+
+        // 로딩 인디케이터 표시
+        function showLoadingIndicator(symbol) {
+            // 종목명 업데이트
+            document.getElementById('selectedStockName').textContent = `${symbol} 분석 중...`;
+            document.getElementById('selectedStockTicker').textContent = symbol;
+
+            // AI 분석 영역 업데이트
+            document.getElementById('aiRecommendation').textContent = '분석 중...';
+            document.getElementById('aiAnalysis').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <i class="fas fa-spinner" style="animation: spin 1s linear infinite; font-size: 24px; color: var(--accent-blue);"></i>
+                    <p style="margin-top: 15px; color: var(--text-secondary);">
+                        AI가 ${symbol} 종목을 분석하고 있습니다...<br>
+                        <span style="font-size: 11px;">예상 소요 시간: 5-10초</span>
+                    </p>
+                </div>
+            `;
+
+            // 가격 정보 초기화
+            document.getElementById('currentPrice').textContent = '분석 중...';
+            document.getElementById('priceChange').textContent = '';
+            document.getElementById('returns1m').textContent = '-';
+            document.getElementById('returns3m').textContent = '-';
+            document.getElementById('volatility').textContent = '-';
+            document.getElementById('peRatio').textContent = '-';
+
+            console.log(`⏳ ${symbol} 분석 시작 (예상 5-10초)`);
+        }
+
+        // 분석 텍스트를 표 형식으로 변환
+        function parseAnalysisToTable(analysisText) {
+            if (!analysisText) return '분석 정보가 없습니다.';
+
+            let tableHtml = '<table class="analysis-table">';
+
+            // 줄 단위로 분리
+            const lines = analysisText.split('\n');
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+
+                // "- " 로 시작하는 항목만 처리
+                if (trimmed.startsWith('- ')) {
+                    const content = trimmed.substring(2); // "- " 제거
+
+                    // 콜론(:)으로 label과 value 분리
+                    const colonIndex = content.indexOf(':');
+                    if (colonIndex > 0) {
+                        const label = content.substring(0, colonIndex).trim();
+                        const value = content.substring(colonIndex + 1).trim();
+
+                        // 값의 스타일 결정 (수익률, 변동성 등)
+                        let valueClass = 'analysis-value';
+
+                        // 수익률인 경우
+                        if (label.includes('수익률') || label.includes('개월')) {
+                            // +/- 기호 또는 숫자로 시작하는지 확인
+                            if (value.startsWith('+') || (value.match(/^[0-9]/) && parseFloat(value) > 0)) {
+                                valueClass += ' positive';
+                            } else if (value.startsWith('-') || (value.match(/^-[0-9]/))) {
+                                valueClass += ' negative';
+                            }
+                        }
+
+                        tableHtml += `
+                            <tr>
+                                <td class="analysis-label">${label}</td>
+                                <td class="${valueClass}">${value}</td>
+                            </tr>
+                        `;
+                    }
+                }
+            }
+
+            tableHtml += '</table>';
+
+            return tableHtml;
+        }
+
+        // 종목 상세 정보 로드
+        async function loadStockDetail(symbol) {
+            try {
+                console.log(`📊 ${symbol} 상세 정보 로딩...`);
+                const response = await axios.post(`${BASE_URL}/api/analyze`, { symbol: symbol });
+
+                if (response.data.success) {
+                    const data = response.data;
+                    const metrics = data.metrics;
+
+                    // 제목
+                    document.getElementById('selectedStockName').textContent = data.company_name || symbol;
+                    document.getElementById('selectedStockTicker').textContent = symbol;
+
+                    // 가격
+                    const price = metrics.current_price;
+                    const priceEl = document.getElementById('currentPrice');
+                    priceEl.textContent = formatPrice(price, symbol);
+
+                    // 수익률
+                    const returns = metrics.returns_1y || 0;
+                    const changeEl = document.getElementById('priceChange');
+                    changeEl.textContent = ` ${returns > 0 ? '+' : ''}${returns.toFixed(2)}%`;
+                    changeEl.className = `price-change ${returns >= 0 ? 'price-up' : 'price-down'}`;
+                    priceEl.className = `current-price ${returns >= 0 ? 'price-up' : 'price-down'}`;
+
+                    // 메타 정보
+                    document.getElementById('returns1m').textContent = `${metrics.returns_1m > 0 ? '+' : ''}${metrics.returns_1m}%`;
+                    document.getElementById('returns3m').textContent = `${metrics.returns_3m > 0 ? '+' : ''}${metrics.returns_3m}%`;
+                    document.getElementById('volatility').textContent = `${metrics.volatility}%`;
+                    document.getElementById('peRatio').textContent = metrics.pe_ratio || 'N/A';
+
+                    // AI 분석 (기본값만 먼저 표시)
+                    document.getElementById('aiRecommendation').textContent = data.recommendation;
+
+                    // 투자 의견을 표 형식으로 변환
+                    const analysisEl = document.getElementById('aiAnalysis');
+                    if (data.analysis) {
+                        analysisEl.innerHTML = parseAnalysisToTable(data.analysis);
+                    } else {
+                        analysisEl.textContent = '분석 정보가 없습니다.';
+                    }
+
+                    // AI 점수 (임시)
+                    const score = Math.min(100, Math.max(0, 50 + returns));
+                    document.getElementById('aiScore').textContent = score.toFixed(0);
+
+                    // 현재 metrics 저장
+                    currentMetrics = metrics;
+
+                    // 차트 업데이트
+                    updateChart(symbol, metrics);
+
+                    // AI 추천 탭에서만 "AI 추천 이유" 버튼 표시
+                    const aiReasonBtn = document.getElementById('aiReasonBtn');
+                    if (currentMarket === 'ai') {
+                        aiReasonBtn.style.display = 'block';
+                    } else {
+                        aiReasonBtn.style.display = 'none';
+                    }
+
+                    // 뉴스는 백그라운드에서 천천히 로드 (optional)
+                    setTimeout(() => {
+                        loadNews(symbol);
+                    }, 500);
+
+                    console.log('✅ 종목 상세 정보 로드 완료 (뉴스는 백그라운드 로딩)');
+                } else {
+                    console.error('❌ API 응답 실패');
+                }
+            } catch (error) {
+                console.error('❌ 종목 정보 로드 실패:', error);
+            }
+        }
+
+        // 차트 기간 변경
+        function changeChartPeriod(period) {
+            currentChartPeriod = period;
+
+            // 버튼 활성화 상태 변경
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // 차트 업데이트 (현재 metrics 사용)
+            if (currentMetrics) {
+                updateChart(currentStock, currentMetrics);
+            }
+        }
+
+        // 차트 업데이트 (실제 과거 데이터 사용)
+        async function updateChart(symbol, metrics) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+
+            try {
+                // 실제 과거 가격 데이터 가져오기
+                const response = await axios.get(`${BASE_URL}/api/historical-prices?symbol=${symbol}&period=${currentChartPeriod}`);
+
+                if (response.data.success) {
+                    const histData = response.data;
+                    const dates = histData.dates;
+                    const prices = histData.prices;
+
+                    // 라벨 간격 조정 (기간에 따라)
+                    const labels = [];
+                    const data = [];
+
+                    let labelInterval = 1;
+                    if (currentChartPeriod === '1m') {
+                        labelInterval = 2;  // 2일마다
+                    } else if (currentChartPeriod === '3m') {
+                        labelInterval = 5;  // 5일마다
+                    } else if (currentChartPeriod === '6m') {
+                        labelInterval = 10;  // 10일마다
+                    } else if (currentChartPeriod === '1y') {
+                        labelInterval = 20;  // 20일마다
+                    }
+
+                    for (let i = 0; i < dates.length; i++) {
+                        if (i % labelInterval === 0 || i === dates.length - 1) {
+                            const date = new Date(dates[i]);
+                            labels.push(date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }));
+                        } else {
+                            labels.push('');
+                        }
+                        data.push(prices[i]);
+                    }
+
+                    // 기존 차트 삭제
+                    if (priceChart) {
+                        priceChart.destroy();
+                    }
+
+                    // 새 차트 생성
+                    priceChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '주가',
+                                data: data,
+                                borderColor: '#2962ff',
+                                backgroundColor: 'rgba(41, 98, 255, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: { color: '#868b98' },
+                                    grid: { color: '#2a2e39' }
+                                },
+                                y: {
+                                    ticks: { color: '#868b98' },
+                                    grid: { color: '#2a2e39' }
+                                }
+                            }
+                        }
+                    });
+
+                    console.log(`✅ 차트 업데이트 완료 (${currentChartPeriod}, ${dates.length}개 데이터)`);
+                } else {
+                    console.error('❌ 과거 가격 데이터 없음:', response.data.message);
+                }
+            } catch (error) {
+                console.error('❌ 차트 업데이트 실패:', error);
+            }
+        }
+
+        // 뉴스 로드
+        async function loadNews(symbol = null) {
+            const el = document.getElementById('newsList');
+            try {
+                // 종목 심볼이 있으면 해당 종목 뉴스, 없으면 일반 뉴스
+                const url = symbol
+                    ? `${BASE_URL}/api/news?symbol=${symbol}&limit=10`
+                    : `${BASE_URL}/api/news?category=technology&limit=10`;
+
+                const response = await axios.get(url);
+
+                if (response.data.success && response.data.news) {
+                    const news = response.data.news;
+
+                    if (news.length === 0) {
+                        el.innerHTML = `<p style="padding: 15px; text-align: center; color: var(--text-secondary);">
+                            ${symbol ? `${symbol} 관련 뉴스를 찾을 수 없습니다.` : '뉴스가 없습니다.'}
+                        </p>`;
+                        return;
+                    }
+
+                    el.innerHTML = news.map(item => `
+                        <div class="news-item" onclick="window.open('${item.url}', '_blank')">
+                            <div class="news-title">${item.title}</div>
+                            <div class="news-meta">${item.source} · ${item.published_at}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    el.innerHTML = '<p style="padding: 15px; text-align: center;">뉴스가 없습니다.</p>';
+                }
+            } catch (error) {
+                console.error('❌ 뉴스 로드 실패:', error);
+                el.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--accent-red);">로드 실패</p>';
+            }
+        }
+
+        // 포트폴리오 생성
+        async function generatePortfolio() {
+            const amount = parseInt(document.getElementById('investmentAmount').value);
+            if (!amount || amount < 1000000) {
+                alert('최소 100만원 이상 입력해주세요.');
+                return;
+            }
+
+            // 현재 탭의 종목 리스트 가져오기
+            const currentStocks = stocksData[currentMarket] || [];
+            if (currentStocks.length === 0) {
+                alert('종목 리스트가 비어있습니다. 먼저 종목을 로드해주세요.');
+                return;
+            }
+
+            // 탭 이름 매핑
+            const marketNames = {
+                'ai': 'AI 추천',
+                'kospi': 'KOSPI',
+                'nasdaq': 'NASDAQ',
+                'trending': '트렌딩'
+            };
+
+            const marketName = marketNames[currentMarket] || currentMarket;
+            const resultEl = document.getElementById('portfolioResult');
+            resultEl.innerHTML = `<div class="loading"><i class="fas fa-spinner"></i> ${marketName} 종목으로 생성 중...</div>`;
+
+            try {
+                // 종목 심볼 배열 생성
+                const stockSymbols = currentStocks.map(s => s.symbol);
+
+                const response = await axios.post(`${BASE_URL}/api/portfolio-suggestion`, {
+                    total_investment: amount,
+                    stocks: stockSymbols  // 현재 탭의 종목 리스트 전달
+                });
+
+                if (response.data.success) {
+                    const data = response.data;
+                    const portfolio = data.portfolio;
+
+                    let html = '<div class="portfolio-summary">';
+                    html += `<div class="summary-row">
+                        <span>총 투자금</span>
+                        <span style="font-weight: 600;">₩${amount.toLocaleString()}</span>
+                    </div>`;
+                    html += `<div class="summary-row">
+                        <span>종목 수</span>
+                        <span style="font-weight: 600;">${portfolio.length}개</span>
+                    </div>`;
+                    html += `<div class="summary-row">
+                        <span>예상 수익률</span>
+                        <span style="font-weight: 600; color: var(--accent-green);">${data.summary.avg_expected_return.toFixed(2)}%</span>
+                    </div>`;
+                    html += '</div>';
+
+                    html += '<div style="max-height: 200px; overflow-y: auto;">';
+                    portfolio.slice(0, 5).forEach(stock => {
+                        html += `
+                            <div class="stock-item">
+                                <div>
+                                    <div class="stock-symbol">${stock.ticker} ${stock.company_name ? '- ' + stock.company_name : ''}</div>
+                                    <div class="stock-name">${stock.shares.toLocaleString()}주</div>
+                                </div>
+                                <div>
+                                    <div class="stock-price">$${stock.current_price.toFixed(2)}</div>
+                                    <div class="stock-change">₩${(stock.actual_amount/10000).toFixed(0)}만원</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+
+                    // 블로그 인사이트 섹션 추가
+                    if (data.portfolio_insights && data.portfolio_insights.length > 0) {
+                        html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">';
+                        html += '<div style="font-weight: 600; margin-bottom: 10px; font-size: 13px;"><i class="fas fa-lightbulb"></i> 포트폴리오 인사이트</div>';
+
+                        data.portfolio_insights.slice(0, 3).forEach(insight => {
+                            const similarity = (insight.similarity * 100).toFixed(0);
+                            html += `
+                                <div style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--accent-blue);">
+                                    <div style="font-weight: 600; font-size: 12px; color: var(--text-bright); margin-bottom: 5px;">
+                                        [${insight.stock}] ${insight.title}
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">
+                                        ${insight.content}
+                                    </div>
+                                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                        <span style="font-size: 10px; background: var(--bg-card); color: var(--accent-green); padding: 2px 6px; border-radius: 3px;">
+                                            일치도 ${similarity}%
+                                        </span>
+                                        ${insight.keywords.map(k => `
+                                            <span style="font-size: 10px; background: var(--bg-card); color: var(--text-secondary); padding: 2px 6px; border-radius: 3px;">
+                                                ${k}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += '</div>';
+                    }
+
+                    // 유사 종목 추천 섹션 추가
+                    if (data.related_stocks && data.related_stocks.length > 0) {
+                        html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">';
+                        html += '<div style="font-weight: 600; margin-bottom: 10px; font-size: 13px;"><i class="fas fa-chart-line"></i> 유사 종목 추천</div>';
+
+                        data.related_stocks.forEach(stock => {
+                            const similarity = (stock.similarity * 100).toFixed(0);
+                            html += `
+                                <div style="background: var(--bg-secondary); padding: 10px; border-radius: 6px; margin-bottom: 8px; cursor: pointer;"
+                                     onclick="selectStock('${stock.symbol}')">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="font-weight: 600; font-size: 12px; color: var(--accent-blue);">
+                                            ${stock.symbol} ${stock.company_name ? '- ' + stock.company_name : ''}
+                                        </div>
+                                        <span style="font-size: 10px; background: var(--bg-card); color: var(--accent-green); padding: 2px 6px; border-radius: 3px;">
+                                            유사도 ${similarity}%
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 5px;">
+                                        ${stock.reason}
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += '</div>';
+                    }
+
+                    html += '<button class="btn" style="width: 100%; margin-top: 10px;" onclick="showBacktestModal()">백테스팅 실행</button>';
+
+                    resultEl.innerHTML = html;
+                    window.currentPortfolio = portfolio;
+                    window.currentPortfolioData = data;  // 전체 데이터 저장
+                } else {
+                    resultEl.innerHTML = '<p style="text-align: center; color: var(--accent-red);">생성 실패</p>';
+                }
+            } catch (error) {
+                console.error('❌ 포트폴리오 생성 실패:', error);
+                resultEl.innerHTML = '<p style="text-align: center; color: var(--accent-red);">생성 실패</p>';
+            }
+        }
+
+        // 포트폴리오 모달
+        function showPortfolioModal() {
+            alert('포트폴리오 제안 기능은 차트 아래에서 사용하실 수 있습니다!');
+        }
+
+        // 백테스팅 모달
+        async function showBacktestModal() {
+            if (!window.currentPortfolio) {
+                alert('먼저 포트폴리오를 생성해주세요.');
+                return;
+            }
+
+            try {
+                const response = await axios.post(`${BASE_URL}/api/portfolio-backtest`, {
+                    portfolio: window.currentPortfolio.map(s => ({ ticker: s.ticker, shares: s.shares })),
+                    months_back: 3
+                });
+
+                if (response.data.success) {
+                    const data = response.data;
+                    alert(`백테스팅 결과:\n\n총 수익률: ${data.performance.total_return.toFixed(2)}%\n샤프 비율: ${data.performance.sharpe_ratio.toFixed(2)}\n최대 낙폭: ${data.performance.max_drawdown.toFixed(2)}%`);
+                } else {
+                    alert('백테스팅 실패');
+                }
+            } catch (error) {
+                console.error('❌ 백테스팅 실패:', error);
+                alert('백테스팅 실행에 실패했습니다.');
+            }
+        }
+
+        // 종목 검색
+        function filterStocks() {
+            const searchTerm = document.getElementById('stockSearch').value.toLowerCase();
+            const items = document.querySelectorAll('.stock-item');
+
+            items.forEach(item => {
+                const symbol = item.querySelector('.stock-symbol').textContent.toLowerCase();
+                const name = item.querySelector('.stock-name').textContent.toLowerCase();
+
+                if (symbol.includes(searchTerm) || name.includes(searchTerm)) {
+                    item.style.display = 'grid';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // 가격 포맷팅
+        function formatPrice(price, symbol) {
+            if (/^\d{6}$/.test(symbol)) {
+                return '₩' + price.toLocaleString();
+            }
+            return '$' + price.toFixed(2);
+        }
+
+        // RAG 검색 모달 열기
+        async function showRAGSearchModal() {
+            document.getElementById('ragSearchModal').style.display = 'block';
+            document.getElementById('ragSearchInput').focus();
+
+            // 최신 업데이트 시간 표시
+            try {
+                const response = await axios.get(`${BASE_URL}/api/blog-update-info`);
+                if (response.data.success) {
+                    const updateInfo = document.getElementById('ragUpdateInfo');
+                    if (updateInfo) {
+                        updateInfo.textContent = `마지막 업데이트: ${response.data.formatted_date} (총 ${response.data.total_insights}건)`;
+                    }
+                }
+            } catch (error) {
+                console.error('❌ 블로그 업데이트 정보 로드 실패:', error);
+            }
+        }
+
+        // RAG 검색 모달 닫기
+        function closeRAGSearchModal() {
+            document.getElementById('ragSearchModal').style.display = 'none';
+            document.getElementById('ragSearchResults').innerHTML = '';
+            document.getElementById('ragSearchInput').value = '';
+        }
+
+        // RAG 인사이트 검색
+        async function searchRAGInsights() {
+            const query = document.getElementById('ragSearchInput').value.trim();
+            const resultsEl = document.getElementById('ragSearchResults');
+
+            if (!query) {
+                resultsEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">검색어를 입력해주세요.</p>';
+                return;
+            }
+
+            resultsEl.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i> 검색 중...</div>';
+
+            try {
+                const response = await axios.post(`${BASE_URL}/api/rag-search`, {
+                    query: query,
+                    top_k: 5
+                });
+
+                if (response.data.success && response.data.insights && response.data.insights.length > 0) {
+                    const insights = response.data.insights;
+
+                    let html = `<p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        <i class="fas fa-check-circle" style="color: var(--accent-green);"></i>
+                        총 <strong>${insights.length}개</strong>의 관련 인사이트를 찾았습니다.
+                    </p>`;
+
+                    insights.forEach((insight, index) => {
+                        const similarity = (insight.similarity * 100).toFixed(0);
+                        const contentPreview = insight.content.length > 300
+                            ? insight.content.substring(0, 300) + '...'
+                            : insight.content;
+                        const hasMore = insight.content.length > 300;
+
+                        html += `
+                            <div class="insight-card" id="insight-${index}">
+                                <div class="insight-title">
+                                    ${index + 1}. ${insight.title}
+                                    <span class="similarity-badge">${similarity}% 일치</span>
+                                </div>
+                                <div class="insight-meta">
+                                    <span><i class="fas fa-industry"></i> ${insight.sector}</span>
+                                    <span><i class="fas fa-smile"></i> ${insight.sentiment}</span>
+                                    <span><i class="fas fa-calendar"></i> ${insight.date}</span>
+                                </div>
+                                <div class="insight-content" id="content-${index}" onclick="toggleInsightContent(${index})"
+                                     data-full="${insight.content.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+                                     data-preview="${contentPreview.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+                                     data-expanded="false">
+                                    ${contentPreview}
+                                </div>
+                                ${hasMore ? `<div class="expand-hint" onclick="toggleInsightContent(${index})">
+                                    <i class="fas fa-chevron-down" id="icon-${index}"></i> 전체 내용 보기
+                                </div>` : ''}
+                                <div class="insight-keywords">
+                                    ${insight.keywords.slice(0, 8).map(k => `<span class="keyword-tag">${k}</span>`).join('')}
+                                </div>
+                                <a href="${insight.url}" target="_blank" style="color: var(--accent-blue); font-size: 12px; margin-top: 10px; display: inline-block;">
+                                    <i class="fas fa-external-link-alt"></i> 원문 보기
+                                </a>
+                            </div>
+                        `;
+                    });
+
+                    resultsEl.innerHTML = html;
+                } else {
+                    resultsEl.innerHTML = `
+                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                            <i class="fas fa-info-circle" style="font-size: 48px; display: block; margin-bottom: 15px;"></i>
+                            "${query}"에 대한 검색 결과가 없습니다.<br>
+                            다른 키워드로 검색해보세요.
+                        </p>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ RAG 검색 실패:', error);
+                resultsEl.innerHTML = `
+                    <p style="text-align: center; color: var(--accent-red); padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; display: block; margin-bottom: 15px;"></i>
+                        검색 실패: ${error.message}<br>
+                        잠시 후 다시 시도해주세요.
+                    </p>
+                `;
+            }
+        }
+
+        // 인사이트 내용 전체 보기 토글
+        function toggleInsightContent(index) {
+            const contentEl = document.getElementById(`content-${index}`);
+            const iconEl = document.getElementById(`icon-${index}`);
+            const isExpanded = contentEl.getAttribute('data-expanded') === 'true';
+
+            if (isExpanded) {
+                // 축소: 요약만 표시
+                const preview = contentEl.getAttribute('data-preview');
+                contentEl.innerHTML = preview;
+                contentEl.setAttribute('data-expanded', 'false');
+                contentEl.classList.remove('expanded');
+                if (iconEl) {
+                    iconEl.className = 'fas fa-chevron-down';
+                    iconEl.parentElement.innerHTML = '<i class="fas fa-chevron-down" id="icon-' + index + '"></i> 전체 내용 보기';
+                }
+            } else {
+                // 확장: 전체 내용 표시
+                const fullContent = contentEl.getAttribute('data-full');
+                contentEl.innerHTML = fullContent;
+                contentEl.setAttribute('data-expanded', 'true');
+                contentEl.classList.add('expanded');
+                if (iconEl) {
+                    iconEl.className = 'fas fa-chevron-up';
+                    iconEl.parentElement.innerHTML = '<i class="fas fa-chevron-up" id="icon-' + index + '"></i> 축소하기';
+                }
+            }
+        }
+
+        // 모달 외부 클릭 시 닫기
+        window.onclick = function(event) {
+            const ragModal = document.getElementById('ragSearchModal');
+            const aiReasonModal = document.getElementById('aiRecommendationReasonModal');
+
+            if (event.target == ragModal) {
+                closeRAGSearchModal();
+            }
+
+            if (event.target == aiReasonModal) {
+                closeAIReasonModal();
+            }
+        }
+
+        // AI 추천 이유 모달 열기
+        async function showAIReasonModal() {
+            if (!currentStock) {
+                alert('종목을 먼저 선택해주세요.');
+                return;
+            }
+
+            const modal = document.getElementById('aiRecommendationReasonModal');
+            const contentEl = document.getElementById('aiRecommendationReasonContent');
+
+            // 모달 표시
+            modal.style.display = 'block';
+
+            // 로딩 표시
+            contentEl.innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>AI 추천 이유 분석 중...</p>
+                </div>
+            `;
+
+            try {
+                const response = await axios.get(`${BASE_URL}/api/recommendation-reason?symbol=${currentStock}`);
+
+                if (response.data.success) {
+                    const data = response.data;
+                    let html = '';
+
+                    // 기본 정보
+                    html += `
+                        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid var(--accent-blue);">
+                            <h3 style="color: var(--text-bright); margin-bottom: 10px; font-size: 20px;">
+                                ${data.company_name} (${data.symbol})
+                            </h3>
+                            <div style="color: var(--text-secondary); font-size: 14px;">
+                                <i class="fas fa-industry"></i> 섹터: <strong style="color: var(--text-primary);">${data.sector}</strong>
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 14px; margin-top: 5px;">
+                                <i class="fas fa-lightbulb"></i> 분석된 블로그 인사이트: <strong style="color: var(--text-primary);">${data.insights_count}개</strong>
+                            </div>
+                        </div>
+                    `;
+
+                    // 추천 요약
+                    html += `
+                        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <h4 style="color: var(--text-bright); margin-bottom: 15px; font-size: 16px;">
+                                <i class="fas fa-chart-line"></i> AI 추천 요약
+                            </h4>
+                            <div style="color: var(--text-primary); line-height: 1.8; white-space: pre-line; font-size: 14px;">
+                                ${data.recommendation_summary}
+                            </div>
+                        </div>
+                    `;
+
+                    // 블로그 인사이트 상세
+                    if (data.insights && data.insights.length > 0) {
+                        html += `
+                            <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h4 style="color: var(--text-bright); margin-bottom: 15px; font-size: 16px;">
+                                    <i class="fas fa-newspaper"></i> 블로그 인사이트 분석
+                                </h4>
+                        `;
+
+                        data.insights.forEach((insight, index) => {
+                            const priceChangeClass = insight.price_change_pct >= 0 ? 'price-up' : 'price-down';
+                            const priceChangeIcon = insight.price_change_pct >= 0 ? '📈' : '📉';
+
+                            html += `
+                                <div style="background: var(--bg-card); padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 3px solid var(--accent-blue);">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                        <h5 style="color: var(--text-bright); font-size: 14px; flex: 1; margin: 0;">
+                                            ${index + 1}. ${insight.title}
+                                        </h5>
+                                        <span class="similarity-badge" style="margin-left: 10px;">
+                                            일치도 ${(insight.similarity * 100).toFixed(0)}%
+                                        </span>
+                                    </div>
+
+                                    <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 10px;">
+                                        <i class="fas fa-calendar"></i> 작성일: ${insight.date}
+                                    </div>
+
+                                    <div style="color: var(--text-primary); font-size: 13px; line-height: 1.6; margin-bottom: 10px;">
+                                        ${insight.content_preview}
+                                    </div>
+
+                                    <div style="background: var(--bg-secondary); padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px;">
+                                            💰 가격 변동 (작성일 → 현재)
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <span style="color: var(--text-secondary); font-size: 12px;">작성 당시:</span>
+                                                <span style="color: var(--text-bright); font-weight: 600; margin-left: 5px;">$${insight.past_price.toFixed(2)}</span>
+                                            </div>
+                                            <div style="font-size: 20px;">${priceChangeIcon}</div>
+                                            <div>
+                                                <span style="color: var(--text-secondary); font-size: 12px;">현재:</span>
+                                                <span style="color: var(--text-bright); font-weight: 600; margin-left: 5px;">$${insight.current_price.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                        <div style="text-align: center; margin-top: 8px;">
+                                            <span style="font-size: 16px; font-weight: bold;" class="${priceChangeClass}">
+                                                ${insight.price_change_pct >= 0 ? '+' : ''}${insight.price_change_pct.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                        ${insight.keywords.map(k => `
+                                            <span class="keyword-tag">${k}</span>
+                                        `).join('')}
+                                    </div>
+
+                                    <a href="${insight.url}" target="_blank" style="color: var(--accent-blue); font-size: 12px; margin-top: 10px; display: inline-block;">
+                                        <i class="fas fa-external-link-alt"></i> 원문 보기
+                                    </a>
+                                </div>
+                            `;
+                        });
+
+                        html += '</div>';
+                    }
+
+                    // 섹터 관련 종목 분석
+                    if (data.sector_stocks && data.sector_stocks.length > 0) {
+                        html += `
+                            <div style="background: var(--bg-secondary); padding: 20px; border-radius: 8px;">
+                                <h4 style="color: var(--text-bright); margin-bottom: 15px; font-size: 16px;">
+                                    <i class="fas fa-layer-group"></i> 동일 섹터 종목 분석 (최근 3개월)
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                        `;
+
+                        data.sector_stocks.forEach(stock => {
+                            const returnsClass = stock.returns_3m >= 0 ? 'price-up' : 'price-down';
+                            html += `
+                                <div style="background: var(--bg-card); padding: 12px; border-radius: 6px; cursor: pointer;"
+                                     onclick="closeAIReasonModal(); selectStock('${stock.symbol}')">
+                                    <div style="font-weight: 600; font-size: 13px; color: var(--text-bright); margin-bottom: 5px;">
+                                        ${stock.symbol}
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">
+                                        ${stock.company_name}
+                                    </div>
+                                    <div style="font-size: 14px; font-weight: bold;" class="${returnsClass}">
+                                        ${stock.returns_3m >= 0 ? '+' : ''}${stock.returns_3m}%
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    contentEl.innerHTML = html;
+                } else {
+                    contentEl.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: var(--accent-red); margin-bottom: 15px;"></i>
+                            <p style="color: var(--text-secondary);">AI 추천 이유를 불러올 수 없습니다.</p>
+                            <p style="color: var(--text-secondary); font-size: 12px; margin-top: 10px;">${response.data.message || '알 수 없는 오류'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ AI 추천 이유 로드 실패:', error);
+                contentEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: var(--accent-red); margin-bottom: 15px;"></i>
+                        <p style="color: var(--text-secondary);">AI 추천 이유 로드 실패</p>
+                        <p style="color: var(--text-secondary); font-size: 12px; margin-top: 10px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // AI 추천 이유 모달 닫기
+        function closeAIReasonModal() {
+            document.getElementById('aiRecommendationReasonModal').style.display = 'none';
+        }
+
+        // 로그아웃
+        function logout() {
+            console.log('🚪 로그아웃 중...');
+
+            // localStorage에서 토큰 삭제
+            localStorage.removeItem('supabase_token');
+            localStorage.removeItem('supabase_user');
+
+            console.log('✅ 로그아웃 완료 - 로그인 페이지로 이동');
+
+            // 로그인 페이지로 리다이렉트
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

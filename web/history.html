@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>거래 히스토리 - AI 헤지펀드</title>
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131722;
+            --bg-card: #1e222d;
+            --bg-hover: #2a2e39;
+            --text-primary: #d1d4dc;
+            --text-secondary: #868b98;
+            --text-bright: #ffffff;
+            --accent-green: #26a69a;
+            --accent-red: #ef5350;
+            --accent-blue: #2962ff;
+            --accent-yellow: #ffb300;
+            --border-color: #2a2e39;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 20px;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: var(--text-bright);
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+        }
+
+        .btn-primary:hover {
+            background: #1e53e5;
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .history-container {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .history-item {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .history-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .history-item.screening {
+            border-left-color: var(--accent-blue);
+        }
+
+        .history-item.portfolio {
+            border-left-color: var(--accent-green);
+        }
+
+        .history-item.analysis {
+            border-left-color: var(--accent-yellow);
+        }
+
+        .history-item.trade {
+            border-left-color: var(--accent-red);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .history-type {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .type-screening {
+            background: rgba(41, 98, 255, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .type-portfolio {
+            background: rgba(38, 166, 154, 0.2);
+            color: var(--accent-green);
+        }
+
+        .type-analysis {
+            background: rgba(255, 179, 0, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .type-trade {
+            background: rgba(239, 83, 80, 0.2);
+            color: var(--accent-red);
+        }
+
+        .history-time {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .history-content {
+            margin-top: 10px;
+        }
+
+        .stock-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .stock-item {
+            background: var(--bg-primary);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .stock-symbol {
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 5px;
+        }
+
+        .stock-detail {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 5px;
+            transition: color 0.3s;
+        }
+
+        .delete-btn:hover {
+            color: var(--accent-red);
+        }
+
+        .backtest-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+        }
+
+        .backtest-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .metric-value.positive {
+            color: var(--accent-green);
+        }
+
+        .metric-value.negative {
+            color: var(--accent-red);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 15px;
+        }
+
+        .stocks-performance {
+            margin-top: 15px;
+        }
+
+        .stock-perf-item {
+            background: var(--bg-card);
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stock-perf-name {
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .stock-perf-return {
+            font-weight: 600;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <i class="fas fa-history"></i>
+            거래 히스토리
+        </h1>
+        <a href="/" class="btn btn-primary">
+            <i class="fas fa-home"></i>
+            메인으로
+        </a>
+    </div>
+
+    <div class="history-container" id="historyContainer">
+        <div class="empty-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>히스토리를 불러오는 중...</p>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://192.168.1.3:8888';
+
+        // 한국어 타입명
+        const typeNames = {
+            'screening': 'AI 자동 스크리닝',
+            'portfolio': '포트폴리오 제안',
+            'analysis': 'AI 상세분석',
+            'trade': '자동거래'
+        };
+
+        // 시간 포맷팅
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // 히스토리 아이템 렌더링
+        function renderHistoryItem(item) {
+            try {
+                const typeName = typeNames[item.type] || item.type;
+                let content = '';
+
+                if (item.type === 'screening' && item.result && item.result.top_stocks) {
+                    content = `
+                        <div class="stock-list">
+                            ${item.result.top_stocks.map(stock => `
+                                <div class="stock-item">
+                                    <div class="stock-symbol">${stock.ticker}</div>
+                                    <div class="stock-detail">점수: ${stock.score.toFixed(2)}</div>
+                                    <div class="stock-detail">현재가: $${stock.current_price.toFixed(2)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else if (item.type === 'portfolio' && item.result) {
+                    // 포트폴리오 데이터 추출 (신규 형식 vs 구 형식 호환)
+                    const portfolioData = item.result.portfolio_data || item.result;
+                    const backtestData = item.result.backtest_data;
+
+                    content = `
+                        <div style="margin-bottom: 10px;">
+                            <strong>총 투자금:</strong> ${portfolioData.total_investment.toLocaleString()}원
+                        </div>
+                        <div class="stock-list">
+                            ${portfolioData.portfolio.map(stock => `
+                                <div class="stock-item">
+                                    <div class="stock-symbol">${stock.ticker}</div>
+                                    <div class="stock-detail">주식 수: ${stock.shares}주</div>
+                                    <div class="stock-detail">투자금: $${stock.actual_amount.toLocaleString()}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+
+                    // 백테스팅 데이터가 있으면 추가 표시
+                    if (backtestData && backtestData.success) {
+                        const chartId = `chart-${item.id}`;
+                        content += `
+                            <div class="backtest-section">
+                                <div class="backtest-title">
+                                    <i class="fas fa-chart-line"></i>
+                                    과거 3개월 수익률 시뮬레이션
+                                </div>
+
+                                <div class="performance-metrics">
+                                    <div class="metric-card">
+                                        <div class="metric-label">총 수익률</div>
+                                        <div class="metric-value ${backtestData.metrics.total_return >= 0 ? 'positive' : 'negative'}">
+                                            ${backtestData.metrics.total_return >= 0 ? '+' : ''}${backtestData.metrics.total_return.toFixed(2)}%
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">변동성</div>
+                                        <div class="metric-value">${backtestData.metrics.volatility.toFixed(2)}%</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">최대 낙폭 (MDD)</div>
+                                        <div class="metric-value negative">${backtestData.metrics.max_drawdown.toFixed(2)}%</div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">샤프 비율</div>
+                                        <div class="metric-value">${backtestData.metrics.sharpe_ratio.toFixed(2)}</div>
+                                    </div>
+                                </div>
+
+                                <div class="chart-container">
+                                    <canvas id="${chartId}"></canvas>
+                                </div>
+
+                                <div class="stocks-performance">
+                                    <strong>종목별 수익률:</strong>
+                                    ${backtestData.stocks_performance.map(stock => `
+                                        <div class="stock-perf-item">
+                                            <span class="stock-perf-name">${stock.ticker}</span>
+                                            <span class="stock-perf-return ${stock.return >= 0 ? 'positive' : 'negative'}">
+                                                ${stock.return >= 0 ? '+' : ''}${stock.return.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else if (item.type === 'analysis' && item.result && item.result.analysis) {
+                    content = `
+                        <div>
+                            <strong>종목:</strong> ${item.data?.symbol || 'N/A'}<br>
+                            <strong>분석:</strong> <pre style="white-space: pre-wrap; margin-top: 10px;">${item.result.analysis}</pre>
+                        </div>
+                    `;
+                } else if (item.type === 'trade') {
+                    content = `
+                        <div>
+                            <strong>거래 결과:</strong> ${JSON.stringify(item.result, null, 2)}
+                        </div>
+                    `;
+                } else {
+                    content = `<div style="color: var(--text-secondary);">데이터 형식이 올바르지 않습니다.</div>`;
+                }
+
+                return `
+                    <div class="history-item ${item.type}">
+                        <div class="history-header">
+                            <div>
+                                <span class="history-type type-${item.type}">${typeName}</span>
+                                <span class="history-time">${formatTime(item.timestamp)}</span>
+                            </div>
+                            <button class="delete-btn" onclick="deleteHistory(${item.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="history-content">
+                            ${content}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('렌더링 오류:', error, item);
+                return `
+                    <div class="history-item">
+                        <div class="history-header">
+                            <div>
+                                <span class="history-type">오류</span>
+                                <span class="history-time">${formatTime(item.timestamp)}</span>
+                            </div>
+                        </div>
+                        <div class="history-content">
+                            <div style="color: var(--accent-red);">항목을 표시할 수 없습니다: ${error.message}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 백테스팅 차트 그리기
+        function renderBacktestChart(chartId, chartData) {
+            const ctx = document.getElementById(chartId);
+            if (!ctx) {
+                console.error('Chart canvas not found:', chartId);
+                return;
+            }
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: '포트폴리오 가치',
+                        data: chartData.values,
+                        borderColor: 'rgb(41, 98, 255)',
+                        backgroundColor: 'rgba(41, 98, 255, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#d1d4dc'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `가치: ${context.parsed.y.toLocaleString()}원`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                color: '#868b98',
+                                callback: function(value) {
+                                    return value.toLocaleString() + '원';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(42, 46, 57, 0.5)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#868b98'
+                            },
+                            grid: {
+                                color: 'rgba(42, 46, 57, 0.5)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 히스토리 로드
+        async function loadHistory() {
+            try {
+                const response = await axios.get(`${BASE_URL}/api/history`);
+                const container = document.getElementById('historyContainer');
+
+                if (response.data.success && response.data.history.length > 0) {
+                    container.innerHTML = response.data.history.map(renderHistoryItem).join('');
+
+                    // 백테스팅 차트 렌더링
+                    response.data.history.forEach(item => {
+                        if (item.type === 'portfolio' && item.result?.backtest_data?.success) {
+                            const chartId = `chart-${item.id}`;
+                            setTimeout(() => {
+                                renderBacktestChart(chartId, item.result.backtest_data.chart_data);
+                            }, 100);
+                        }
+                    });
+                } else {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>아직 거래 히스토리가 없습니다.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('히스토리 로드 실패:', error);
+                document.getElementById('historyContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>히스토리를 불러오는데 실패했습니다.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 히스토리 삭제
+        async function deleteHistory(id) {
+            if (!confirm('이 히스토리를 삭제하시겠습니까?')) return;
+
+            try {
+                await axios.delete(`${BASE_URL}/api/history/${id}`);
+                loadHistory();
+            } catch (error) {
+                console.error('삭제 실패:', error);
+                alert('삭제에 실패했습니다.');
+            }
+        }
+
+        // 페이지 로드 시 히스토리 불러오기
+        loadHistory();
+    </script>
+</body>
+</html>
