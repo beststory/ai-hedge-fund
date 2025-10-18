@@ -1986,6 +1986,110 @@ AI는 다음 요소들을 종합적으로 고려하여 이 종목을 추천했�
         }
 
 
+@app.post("/api/asset-allocation")
+async def get_asset_allocation(request: Dict[str, Any] = None):
+    """
+    총체적 자산 배분 제안 API (매크로 경제, 환율, 지정학적 리스크 종합 분석)
+
+    Args:
+        request: {
+            "investment_amount": 투자 금액 (기본 1억원),
+            "risk_tolerance": 리스크 허용도 (낮음/보통/높음, 기본 보통)
+        }
+
+    Returns:
+        자산 배분 추천, 시장 환경 분석, 리스크 평가
+    """
+    if request is None:
+        request = {}
+
+    # 캐시 조회 (investment_amount + risk_tolerance로 1시간 캐싱)
+    investment_amount = request.get("investment_amount", 100000000)
+    risk_tolerance = request.get("risk_tolerance", "보통")
+    cache_params = {"investment_amount": investment_amount, "risk_tolerance": risk_tolerance}
+    cached = cache_manager.get_cached("asset-allocation", params=cache_params, ttl_seconds=3600)
+    if cached:
+        logger.info(f"✅ 캐시에서 자산 배분 제안 반환 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance})")
+        return cached
+
+    try:
+        from src.agents.asset_allocation_agent import get_asset_allocation_agent
+        from src.tools.forex_data import analyze_forex_market
+        from src.tools.news_aggregator import analyze_geopolitical_risks
+
+        logger.info(f"🔄 자산 배분 제안 새로 계산 중 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance})")
+
+        # 자산 배분 에이전트 실행
+        agent = get_asset_allocation_agent()
+        recommendation = agent.generate_asset_allocation(
+            investment_amount=investment_amount,
+            risk_tolerance=risk_tolerance
+        )
+
+        if not recommendation:
+            return {
+                "success": False,
+                "message": "자산 배분 제안을 생성할 수 없습니다."
+            }
+
+        # 환율 시장 분석 추가
+        forex_analysis = analyze_forex_market()
+
+        # 지정학적 리스크 추가
+        geo_risk = analyze_geopolitical_risks(days=7)
+
+        # 요약 정보 생성
+        summary = agent.get_allocation_summary(recommendation)
+
+        result = {
+            "success": True,
+            "investment_amount": investment_amount,
+            "risk_tolerance": risk_tolerance,
+            "recommendation": {
+                "allocations": [
+                    {
+                        "asset_class": alloc.asset_class,
+                        "allocation_percent": alloc.allocation_percent,
+                        "reasoning": alloc.reasoning,
+                        "instruments": alloc.instruments,
+                        "risk_level": alloc.risk_level
+                    }
+                    for alloc in recommendation.allocations
+                ],
+                "total_allocation": recommendation.total_allocation,
+                "market_environment": recommendation.market_environment,
+                "risk_assessment": recommendation.risk_assessment,
+                "rebalancing_frequency": recommendation.rebalancing_frequency,
+                "key_catalysts": recommendation.key_catalysts,
+                "warnings": recommendation.warnings
+            },
+            "summary": summary,
+            "forex_analysis": {
+                "krw_usd_trend": forex_analysis.get("krw_usd_trend", {}),
+                "dollar_index": forex_analysis.get("dollar_index", {})
+            },
+            "geopolitical_risk": geo_risk,
+            "generated_at": datetime.now().isoformat(),
+            "message": "매크로 경제, 환율, 지정학적 리스크를 종합한 자산 배분 제안입니다."
+        }
+
+        # 캐시 저장 (1시간)
+        cache_manager.set_cached("asset-allocation", result, params=cache_params, ttl_seconds=3600)
+        logger.info(f"💾 자산 배분 제안 캐시 저장 완료 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance})")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ 자산 배분 제안 생성 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"자산 배분 제안 생성 실패: {str(e)}"
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8888)
