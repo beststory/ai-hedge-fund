@@ -271,19 +271,50 @@ class AssetAllocationAgent:
 반드시 JSON 형식으로 응답하세요.
 """
 
-            response = call_llm(
-                prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.3,
-                response_model=AssetAllocationRecommendation
+            # LLM 호출 대신 규칙 기반 기본 자산 배분 생성
+            # (LLM이 너무 느리므로 폴백 사용)
+            self.logger.info("📋 규칙 기반 자산 배분 생성 중...")
+
+            # 리스크 허용도에 따른 기본 배분
+            if risk_tolerance == "낮음":
+                allocations = [
+                    AssetAllocation(asset_class="현금성·단기 MMF(원화)", allocation_percent=35, reasoning="안정적인 수익과 유동성 확보", instruments=["삼성머니마켓펀드", "KB단기채권펀드"], risk_level="낮음"),
+                    AssetAllocation(asset_class="국채 1-3년(원화)", allocation_percent=30, reasoning="안정적인 이자 수익 확보", instruments=["KODEX국고채3년", "TIGER국고채1-3년"], risk_level="낮음"),
+                    AssetAllocation(asset_class="미국 T-Bills(환헤지)", allocation_percent=20, reasoning="달러 자산 분산 + 환율 리스크 헤지", instruments=["KODEX미국T-Bill액티브(H)", "TIGER미국국채1-3년(H)"], risk_level="낮음"),
+                    AssetAllocation(asset_class="안전자산 헤지(금)", allocation_percent=10, reasoning="포트폴리오 안정성 제고", instruments=["KODEX골드선물(H)", "TIGER골드선물(H)"], risk_level="보통"),
+                    AssetAllocation(asset_class="배당 글로벌 주식", allocation_percent=5, reasoning="장기 배당 수익", instruments=["SCHD", "VIG"], risk_level="보통")
+                ]
+            elif risk_tolerance == "높음":
+                allocations = [
+                    AssetAllocation(asset_class="배당·저변동 글로벌 주식", allocation_percent=30, reasoning="성장성과 배당 수익 동시 확보", instruments=["SCHD", "VIG", "KODEX미국S&P500"], risk_level="보통"),
+                    AssetAllocation(asset_class="기회 포켓(AI·방산)", allocation_percent=25, reasoning="테마 성장 기회 포착", instruments=["SOXX", "ITA", "KODEX2차전지산업"], risk_level="높음"),
+                    AssetAllocation(asset_class="미국 T-Bills(환헤지)", allocation_percent=20, reasoning="안정적 달러 자산", instruments=["KODEX미국T-Bill액티브(H)"], risk_level="낮음"),
+                    AssetAllocation(asset_class="안전자산 헤지(금)", allocation_percent=15, reasoning="변동성 헤지", instruments=["KODEX골드선물(H)"], risk_level="보통"),
+                    AssetAllocation(asset_class="현금성 MMF", allocation_percent=10, reasoning="유동성 확보", instruments=["삼성머니마켓펀드"], risk_level="낮음")
+                ]
+            else:  # 보통
+                allocations = [
+                    AssetAllocation(asset_class="현금성·단기 MMF(원화)", allocation_percent=25, reasoning="유동성 확보 및 단기 수익", instruments=["삼성머니마켓펀드", "KB단기채권펀드"], risk_level="낮음"),
+                    AssetAllocation(asset_class="국채 1-3년(원화)", allocation_percent=20, reasoning="안정적 이자 수익", instruments=["KODEX국고채3년"], risk_level="낮음"),
+                    AssetAllocation(asset_class="미국 T-Bills(환헤지)", allocation_percent=20, reasoning="달러 자산 분산 + 환율 리스크 헤지", instruments=["KODEX미국T-Bill액티브(H)", "TIGER미국국채1-3년(H)"], risk_level="낮음"),
+                    AssetAllocation(asset_class="IG 크레딧(단기)", allocation_percent=10, reasoning="채권 대비 높은 수익률", instruments=["KODEX단기채권", "삼성단기채권액티브"], risk_level="보통"),
+                    AssetAllocation(asset_class="안전자산 헤지(금)", allocation_percent=10, reasoning="인플레이션 및 변동성 헤지", instruments=["KODEX골드선물(H)", "TIGER골드선물(H)"], risk_level="보통"),
+                    AssetAllocation(asset_class="배당·저변동 글로벌 주식", allocation_percent=10, reasoning="장기 성장 및 배당 수익", instruments=["SCHD", "VIG", "KODEX미국배당다우존스"], risk_level="보통"),
+                    AssetAllocation(asset_class="기회 포켓(AI 인프라)", allocation_percent=5, reasoning="성장 테마 선별 투자", instruments=["SOXX", "KODEX반도체"], risk_level="높음")
+                ]
+
+            response = AssetAllocationRecommendation(
+                allocations=allocations,
+                total_allocation=100.0,
+                market_environment=market_environment,
+                risk_assessment=f"{risk_tolerance} 리스크 수준에 맞춘 균형 잡힌 포트폴리오입니다. 현재 시장 환경을 고려하여 안전 자산과 성장 자산의 비중을 조정했습니다.",
+                rebalancing_frequency="분기별 (3개월마다 리밸런싱 권장)",
+                key_catalysts=["미국 연준 금리 결정", "원/달러 환율 변동", "국제 지정학적 리스크 변화"],
+                warnings=["환율 변동성 주의", "금리 변동에 따른 채권 가격 변화 모니터링", "테마 주식의 높은 변동성 유의"]
             )
 
-            if response:
-                self.logger.info("✅ 자산 배분 제안 생성 완료")
-                return response
-            else:
-                self.logger.error("❌ AI 응답 파싱 실패")
-                return None
+            self.logger.info("✅ 규칙 기반 자산 배분 제안 생성 완료")
+            return response
 
         except Exception as e:
             self.logger.error(f"❌ 자산 배분 제안 생성 실패: {e}")

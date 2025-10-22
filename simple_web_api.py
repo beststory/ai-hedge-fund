@@ -2090,6 +2090,249 @@ async def get_asset_allocation(request: Dict[str, Any] = None):
         }
 
 
+# ============================================================================
+# IQC 전략 API 엔드포인트 (WorldQuant 우승 전략)
+# ============================================================================
+
+class IQCRegimeRequest(BaseModel):
+    interest_rate: float
+    gdp_growth: float
+    unemployment_rate: float
+    inflation_rate: float
+    pmi: Optional[float] = None
+    credit_spread: Optional[float] = None
+
+class IQCPortfolioRequest(BaseModel):
+    tickers: List[str]
+    total_capital: float = 1_000_000.0
+    num_long: int = 20
+    num_short: int = 20
+    regime_request: Optional[IQCRegimeRequest] = None
+
+class IQCBacktestRequest(BaseModel):
+    tickers: List[str]
+    start_date: str
+    end_date: str
+    initial_capital: float = 1_000_000.0
+    rebalance_frequency: str = "MONTHLY"
+
+@app.get("/iqc", response_class=HTMLResponse)
+@app.get("/iqc.html", response_class=HTMLResponse)
+async def iqc_page():
+    """IQC 전략 페이지"""
+    try:
+        with open("web/iqc.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="IQC 페이지를 찾을 수 없습니다")
+
+@app.post("/api/iqc/regime-analysis")
+async def iqc_regime_analysis(request: IQCRegimeRequest):
+    """IQC 전략: 시장 레짐 분석"""
+    try:
+        from src.quant.regime_detector import detect_current_regime
+
+        result = detect_current_regime(
+            interest_rate=request.interest_rate,
+            gdp_growth=request.gdp_growth,
+            unemployment_rate=request.unemployment_rate,
+            inflation_rate=request.inflation_rate,
+            pmi=request.pmi,
+            credit_spread=request.credit_spread
+        )
+
+        return {
+            "success": True,
+            "regime": result.regime.value,
+            "confidence": result.confidence,
+            "rate_environment": result.rate_environment,
+            "economic_cycle": result.economic_cycle,
+            "recommended_sectors": result.recommended_sectors,
+            "recommended_factors": result.recommended_factors,
+            "reasoning": result.reasoning,
+            "timestamp": result.timestamp
+        }
+
+    except Exception as e:
+        logger.error(f"레짐 분석 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"레짐 분석 실패: {str(e)}")
+
+@app.post("/api/iqc/portfolio")
+async def iqc_portfolio_generation(request: IQCPortfolioRequest):
+    """IQC 전략: 롱-숏 포트폴리오 생성"""
+    try:
+        from src.quant.regime_detector import detect_current_regime
+        from src.quant.alpha_factors import AlphaFactorCalculator, StockData
+        from src.quant.portfolio_optimizer import LongShortOptimizer
+        import numpy as np
+
+        # 1. 레짐 분석
+        if request.regime_request:
+            regime_analysis = detect_current_regime(**request.regime_request.dict())
+        else:
+            regime_analysis = detect_current_regime(
+                interest_rate=5.5,
+                gdp_growth=2.1,
+                unemployment_rate=3.7,
+                inflation_rate=3.1,
+                pmi=51.0
+            )
+
+        # 2. 주식 데이터 수집 및 알파 팩터 계산 (샘플 데이터)
+        calculator = AlphaFactorCalculator()
+        stocks = []
+
+        for ticker in request.tickers[:30]:
+            try:
+                stock_data = StockData(
+                    symbol=ticker,
+                    current_price=100.0 + np.random.uniform(-50, 50),
+                    market_cap=1_000_000_000 + np.random.uniform(0, 10_000_000_000),
+                    price_1m_ago=95.0 + np.random.uniform(-10, 10),
+                    price_3m_ago=90.0 + np.random.uniform(-10, 10),
+                    price_6m_ago=85.0 + np.random.uniform(-10, 10),
+                    price_1y_ago=80.0 + np.random.uniform(-10, 10),
+                    pe_ratio=20.0 + np.random.uniform(-10, 10),
+                    pb_ratio=3.0 + np.random.uniform(-1, 2),
+                    dividend_yield=2.0 + np.random.uniform(0, 3),
+                    roe=0.15 + np.random.uniform(-0.05, 0.1),
+                    roa=0.08 + np.random.uniform(-0.03, 0.05),
+                    debt_to_equity=0.5 + np.random.uniform(-0.2, 0.5),
+                    earnings_growth=0.10 + np.random.uniform(-0.05, 0.15),
+                    volatility_1m=0.20 + np.random.uniform(-0.05, 0.1),
+                    news_sentiment=np.random.uniform(-0.5, 0.5)
+                )
+
+                factors = calculator.calculate_all_factors(stock_data)
+                stocks.append((stock_data, factors))
+
+            except Exception as e:
+                logger.warning(f"{ticker} 데이터 생성 실패: {e}")
+                continue
+
+        if not stocks:
+            raise HTTPException(status_code=400, detail="유효한 주식 데이터가 없습니다")
+
+        # 3. 포트폴리오 최적화
+        optimizer = LongShortOptimizer(
+            num_long=request.num_long,
+            num_short=request.num_short
+        )
+
+        portfolio = optimizer.optimize_portfolio(
+            stocks=stocks,
+            regime_analysis=regime_analysis,
+            total_capital=request.total_capital
+        )
+
+        # 4. 리스크 평가
+        from src.quant.risk_manager import RiskManager
+        risk_manager = RiskManager()
+        risk_assessment = risk_manager.assess_risk(portfolio)
+
+        return {
+            "success": True,
+            "portfolio": {
+                "regime": portfolio.regime.value,
+                "regime_confidence": portfolio.regime_confidence,
+                "long_positions": [p.dict() for p in portfolio.long_positions],
+                "short_positions": [p.dict() for p in portfolio.short_positions],
+                "total_long_exposure": portfolio.total_long_exposure,
+                "total_short_exposure": portfolio.total_short_exposure,
+                "net_exposure": portfolio.net_exposure,
+                "gross_exposure": portfolio.gross_exposure,
+                "expected_return": portfolio.expected_return,
+                "expected_volatility": portfolio.expected_volatility,
+                "sharpe_ratio": portfolio.sharpe_ratio
+            },
+            "risk_assessment": {
+                "is_acceptable": risk_assessment.is_acceptable,
+                "overall_risk_level": risk_assessment.overall_risk_level.value,
+                "metrics": risk_assessment.metrics.dict(),
+                "violations": [v.dict() for v in risk_assessment.violations],
+                "recommendations": risk_assessment.recommendations
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"포트폴리오 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"포트폴리오 생성 실패: {str(e)}")
+
+@app.post("/api/iqc/backtest")
+async def iqc_backtest(request: IQCBacktestRequest):
+    """IQC 전략: 백테스트 실행"""
+    try:
+        from src.quant.iqc_backtester import IQCBacktester, BacktestConfig, RebalanceFrequency
+        import numpy as np
+        from datetime import datetime as dt, timedelta as td
+
+        config = BacktestConfig(
+            start_date=request.start_date,
+            end_date=request.end_date,
+            initial_capital=request.initial_capital,
+            rebalance_frequency=RebalanceFrequency[request.rebalance_frequency]
+        )
+
+        backtester = IQCBacktester(config)
+
+        # 샘플 데이터 생성
+        market_data = {}
+        for ticker in request.tickers:
+            prices = []
+            current_price = 100.0
+            current_date = dt.strptime(request.start_date, "%Y-%m-%d")
+            end_date = dt.strptime(request.end_date, "%Y-%m-%d")
+
+            while current_date <= end_date:
+                change = np.random.uniform(-0.02, 0.02)
+                current_price *= (1 + change)
+                prices.append((current_date.strftime("%Y-%m-%d"), current_price))
+                current_date += td(days=1)
+
+            market_data[ticker] = prices
+
+        from src.quant.regime_detector import RegimeSignals
+        regime_data = [
+            (request.start_date, RegimeSignals(
+                interest_rate=5.5,
+                gdp_growth=2.1,
+                unemployment_rate=3.7,
+                inflation_rate=3.1,
+                pmi=51.0
+            ))
+        ]
+
+        result = backtester.run_backtest(
+            stock_universe=request.tickers,
+            market_data=market_data,
+            regime_data=regime_data
+        )
+
+        return {
+            "success": True,
+            "total_return": result.total_return,
+            "annualized_return": result.annualized_return,
+            "volatility": result.volatility,
+            "sharpe_ratio": result.sharpe_ratio,
+            "sortino_ratio": result.sortino_ratio,
+            "max_drawdown": result.max_drawdown,
+            "total_trades": result.total_trades,
+            "winning_trades": result.winning_trades,
+            "losing_trades": result.losing_trades,
+            "win_rate": result.win_rate,
+            "total_commission": result.total_commission,
+            "total_slippage": result.total_slippage,
+            "daily_performance": [p.dict() for p in result.daily_performance[-30:]],
+            "timestamp": result.timestamp
+        }
+
+    except Exception as e:
+        logger.error(f"백테스트 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"백테스트 실패: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8888)

@@ -83,5 +83,29 @@ services:
     tty: true
     stdin_open: true
 
+  web-api:
+    build: .
+    image: ai-hedge-fund
+    container_name: ai-hedge-fund-web
+    depends_on:
+      - ollama
+    volumes:
+      - ./.env:/app/.env
+      - ./web:/app/web
+      - ./data:/app/data
+    command: python simple_web_api.py
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_BASE_URL=http://ollama:11434
+    ports:
+      - "8888:8888"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 volumes:
   ollama_data: 

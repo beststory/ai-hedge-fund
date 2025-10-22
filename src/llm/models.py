@@ -135,7 +135,10 @@ def get_model(model_name: str, model_provider: ModelProvider) -> ChatOpenAI | Ch
         # Check if OLLAMA_HOST is set (for Docker on macOS)
         ollama_host = os.getenv("OLLAMA_HOST", "localhost")
         base_url = os.getenv("OLLAMA_BASE_URL", f"http://{ollama_host}:11434")
+        # Limit threads to 10 to reduce CPU usage (default 20)
+        num_thread = int(os.getenv("OLLAMA_NUM_THREAD", "10"))
         return ChatOllama(
             model=model_name,
             base_url=base_url,
+            num_thread=num_thread,
         )

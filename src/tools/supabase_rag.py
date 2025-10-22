@@ -42,7 +42,7 @@ class SupabaseRAG:
                     "model": "nomic-embed-text",
                     "prompt": text
                 },
-                timeout=30
+                timeout=5  # 30초에서 5초로 단축
             )
             response.raise_for_status()
             embedding = response.json()["embedding"]
@@ -92,11 +92,14 @@ class SupabaseRAG:
             raise
 
     def insert_insight(self, insight: Dict) -> bool:
-        """인사이트 삽입"""
+        """인사이트 삽입 (제목 임베딩 + 내용 임베딩)"""
         try:
             # 제목 + 내용으로 임베딩 생성
             text = f"{insight['title']} {insight['content']}"
             embedding = self.generate_embedding(text)
+
+            # 제목만으로 임베딩 생성 (하이브리드 검색용)
+            title_embedding = self.generate_embedding(insight['title'])
 
             # Supabase에 삽입
             data = {
@@ -107,7 +110,8 @@ class SupabaseRAG:
                 "keywords": insight.get("keywords", []),
                 "date": insight.get("date", ""),
                 "url": insight.get("url", ""),
-                "embedding": embedding
+                "embedding": embedding,
+                "title_embedding": title_embedding
             }
 
             result = self.client.table("investment_insights").insert(data).execute()
@@ -119,39 +123,72 @@ class SupabaseRAG:
             logger.error(f"❌ 인사이트 삽입 실패: {e}")
             return False
 
-    def search_similar(self, query: str, top_k: int = 3) -> List[Dict]:
-        """벡터 유사도 기반 검색"""
+    def search_similar(self, query: str, top_k: int = 3, use_hybrid: bool = True, title_weight: float = None, use_text_search: bool = True) -> List[Dict]:
+        """벡터 유사도 + 텍스트 검색 하이브리드 시스템
+
+        Args:
+            query: 검색 쿼리
+            top_k: 반환할 결과 수
+            use_hybrid: True면 하이브리드 검색 (제목+내용 벡터), False면 기존 검색 (내용 벡터만)
+            title_weight: 하이브리드 검색 시 제목 가중치 (0.0~1.0)
+                         None이면 쿼리 길이에 따라 자동 조정:
+                         - 짧은 쿼리(≤10자): 1.0 (제목 100%)
+                         - 중간 쿼리(11-20자): 0.8 (제목 80%)
+                         - 긴 쿼리(>20자): 0.5 (제목 50%)
+            use_text_search: True면 텍스트 매칭 보너스 점수 추가 (제목 +0.15, 내용 +0.05)
+        """
         try:
+            # 스마트 가중치 조정: 쿼리 길이에 따라 자동 설정
+            if title_weight is None:
+                query_len = len(query)
+                if query_len <= 10:
+                    title_weight = 1.0  # 짧은 키워드는 제목 중심 검색
+                elif query_len <= 20:
+                    title_weight = 0.8  # 중간 길이는 제목 위주
+                else:
+                    title_weight = 0.5  # 긴 쿼리는 내용도 중요
+
+                logger.info(f"스마트 가중치 조정: 쿼리 길이 {query_len}자 → 제목 가중치 {title_weight}")
+
             # 쿼리 임베딩 생성
             query_embedding = self.generate_embedding(query)
 
-            # pgvector 유사도 검색 (RPC 함수 호출)
-            # Supabase에서 아래 함수를 미리 만들어야 함:
-            # CREATE FUNCTION match_insights(query_embedding vector(768), match_count int)
-            # RETURNS TABLE (id int, title text, content text, sector text, sentiment text, keywords text[], similarity float)
-            # AS $$
-            #   SELECT id, title, content, sector, sentiment, keywords,
-            #          1 - (embedding <=> query_embedding) as similarity
-            #   FROM investment_insights
-            #   ORDER BY embedding <=> query_embedding
-            #   LIMIT match_count;
-            # $$ LANGUAGE sql;
-
-            result = self.client.rpc(
-                "match_insights",
-                {
+            if use_hybrid:
+                # 하이브리드 검색 (제목 + 내용 벡터 + 텍스트 매칭)
+                params = {
                     "query_embedding": query_embedding,
-                    "match_count": top_k
+                    "match_count": top_k,
+                    "use_title_weight": title_weight
                 }
-            ).execute()
+
+                # 텍스트 검색 활성화 시 쿼리 텍스트 추가
+                if use_text_search:
+                    params["query_text"] = query
+                    logger.info(f"텍스트 검색 활성화: '{query}' 키워드 매칭")
+
+                result = self.client.rpc("match_insights_hybrid", params).execute()
+            else:
+                # 기존 검색 (내용만)
+                result = self.client.rpc(
+                    "match_insights",
+                    {
+                        "query_embedding": query_embedding,
+                        "match_count": top_k
+                    }
+                ).execute()
 
             insights = result.data
-            logger.info(f"✅ {len(insights)}개 유사 인사이트 발견")
+            search_mode = "벡터+텍스트" if (use_hybrid and use_text_search) else ("하이브리드" if use_hybrid else "기본")
+            logger.info(f"✅ {len(insights)}개 유사 인사이트 발견 (모드: {search_mode})")
 
             return insights
 
         except Exception as e:
             logger.error(f"❌ 검색 실패: {e}")
+            # 하이브리드 실패 시 기존 방식으로 재시도
+            if use_hybrid:
+                logger.info("하이브리드 검색 실패, 기존 방식으로 재시도...")
+                return self.search_similar(query, top_k, use_hybrid=False)
             return []
 
     def migrate_json_data(self, json_path: str):

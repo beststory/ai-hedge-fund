@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IQC 전략 - WorldQuant 우승 전략</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131722;
+            --bg-card: #1e222d;
+            --bg-hover: #2a2e39;
+            --text-primary: #d1d4dc;
+            --text-secondary: #868b98;
+            --text-bright: #ffffff;
+            --accent-green: #26a69a;
+            --accent-red: #ef5350;
+            --accent-blue: #2962ff;
+            --border-color: #2a2e39;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-color);
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        .header h1 {
+            color: var(--accent-blue);
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: var(--accent-blue);
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            color: var(--text-bright);
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background: #1e4db7;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: var(--bg-hover);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+        }
+
+        .btn-success:hover {
+            background: #1e8776;
+        }
+
+        .result-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-box h3 {
+            color: var(--accent-green);
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .result-value {
+            color: var(--text-bright);
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .result-value.positive {
+            color: var(--accent-green);
+        }
+
+        .result-value.negative {
+            color: var(--accent-red);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--accent-blue);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .portfolio-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .portfolio-table th {
+            background: var(--bg-secondary);
+            padding: 12px;
+            text-align: left;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .portfolio-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .portfolio-table tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .badge-long {
+            background: rgba(38, 166, 154, 0.2);
+            color: var(--accent-green);
+        }
+
+        .badge-short {
+            background: rgba(239, 83, 80, 0.2);
+            color: var(--accent-red);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> 메인 대시보드로 돌아가기</a>
+
+    <div class="header">
+        <h1><i class="fas fa-trophy"></i> IQC 전략 - WorldQuant 우승 전략</h1>
+        <p>2025년 WorldQuant International Quant Championship 우승 전략 (김민겸, UNIST)</p>
+    </div>
+
+    <!-- 레짐 분석 섹션 -->
+    <div class="section">
+        <h2><i class="fas fa-chart-line"></i> 시장 레짐 분석</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            현재 경제 지표를 입력하여 시장 레짐을 분석합니다 (저금리/고금리 × 확장기/침체기)
+        </p>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="interest_rate">금리 (%)</label>
+                <input type="number" id="interest_rate" value="5.5" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="gdp_growth">GDP 성장률 (%)</label>
+                <input type="number" id="gdp_growth" value="2.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="unemployment_rate">실업률 (%)</label>
+                <input type="number" id="unemployment_rate" value="3.7" step="0.1">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="inflation_rate">인플레이션율 (%)</label>
+                <input type="number" id="inflation_rate" value="3.1" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="pmi">PMI 지수 (선택)</label>
+                <input type="number" id="pmi" value="51.0" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="credit_spread">신용 스프레드 (bp, 선택)</label>
+                <input type="number" id="credit_spread" value="" step="1">
+            </div>
+        </div>
+
+        <button class="btn" onclick="analyzeRegime()">
+            <i class="fas fa-play"></i> 레짐 분석 실행
+        </button>
+
+        <div id="regime-result"></div>
+    </div>
+
+    <!-- 포트폴리오 생성 섹션 -->
+    <div class="section">
+        <h2><i class="fas fa-briefcase"></i> 롱-숏 포트폴리오 생성</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            시장 중립적인 롱-숏 포트폴리오를 생성합니다 (32개 알파 팩터 기반)
+        </p>
+
+        <div class="form-group">
+            <label for="tickers">종목 코드 (쉼표로 구분)</label>
+            <input type="text" id="tickers" value="AAPL,MSFT,NVDA,GOOGL,AMZN,META,TSLA,JPM,BAC,WMT" placeholder="AAPL,MSFT,NVDA,...">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="total_capital">총 운용 자본 ($)</label>
+                <input type="number" id="total_capital" value="1000000" step="100000">
+            </div>
+            <div class="form-group">
+                <label for="num_long">롱 포지션 종목 수</label>
+                <input type="number" id="num_long" value="5" min="1" max="20">
+            </div>
+            <div class="form-group">
+                <label for="num_short">숏 포지션 종목 수</label>
+                <input type="number" id="num_short" value="5" min="1" max="20">
+            </div>
+        </div>
+
+        <button class="btn btn-success" onclick="generatePortfolio()">
+            <i class="fas fa-magic"></i> 포트폴리오 생성
+        </button>
+
+        <div id="portfolio-result"></div>
+    </div>
+
+    <!-- 백테스팅 섹션 -->
+    <div class="section">
+        <h2><i class="fas fa-clock"></i> 백테스팅</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            IQC 전략의 과거 성과를 시뮬레이션합니다
+        </p>
+
+        <div class="form-group">
+            <label for="backtest_tickers">종목 코드 (쉼표로 구분)</label>
+            <input type="text" id="backtest_tickers" value="AAPL,MSFT,NVDA,GOOGL,AMZN" placeholder="AAPL,MSFT,NVDA,...">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="start_date">시작일</label>
+                <input type="date" id="start_date" value="2024-01-01">
+            </div>
+            <div class="form-group">
+                <label for="end_date">종료일</label>
+                <input type="date" id="end_date" value="2024-03-31">
+            </div>
+            <div class="form-group">
+                <label for="rebalance_frequency">리밸런싱 주기</label>
+                <select id="rebalance_frequency">
+                    <option value="MONTHLY">월별</option>
+                    <option value="QUARTERLY">분기별</option>
+                    <option value="YEARLY">연별</option>
+                </select>
+            </div>
+        </div>
+
+        <button class="btn" onclick="runBacktest()">
+            <i class="fas fa-chart-bar"></i> 백테스트 실행
+        </button>
+
+        <div id="backtest-result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://192.168.1.3:8888/api/iqc';
+
+        async function analyzeRegime() {
+            const resultDiv = document.getElementById('regime-result');
+            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>레짐 분석 중...</p></div>';
+
+            try {
+                const data = {
+                    interest_rate: parseFloat(document.getElementById('interest_rate').value),
+                    gdp_growth: parseFloat(document.getElementById('gdp_growth').value),
+                    unemployment_rate: parseFloat(document.getElementById('unemployment_rate').value),
+                    inflation_rate: parseFloat(document.getElementById('inflation_rate').value),
+                };
+
+                const pmi = document.getElementById('pmi').value;
+                if (pmi) data.pmi = parseFloat(pmi);
+
+                const credit_spread = document.getElementById('credit_spread').value;
+                if (credit_spread) data.credit_spread = parseFloat(credit_spread);
+
+                const response = await axios.post(`${API_BASE}/regime-analysis`, data);
+                const result = response.data;
+
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result-box">
+                            <h3><i class="fas fa-check-circle"></i> 레짐 분석 결과</h3>
+                            <div class="result-item">
+                                <span class="result-label">시장 레짐</span>
+                                <span class="result-value" style="font-size: 16px; font-weight: bold;">${result.regime}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">확신도</span>
+                                <span class="result-value">${(result.confidence * 100).toFixed(1)}%</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">금리 환경</span>
+                                <span class="result-value">${result.rate_environment}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">경기 사이클</span>
+                                <span class="result-value">${result.economic_cycle}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">추천 섹터</span>
+                                <span class="result-value">${result.recommended_sectors.join(', ')}</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">추천 팩터</span>
+                                <span class="result-value">${result.recommended_factors.join(', ')}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-box"><h3 style="color: var(--accent-red);">❌ 오류</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        async function generatePortfolio() {
+            const resultDiv = document.getElementById('portfolio-result');
+            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>포트폴리오 생성 중...</p></div>';
+
+            try {
+                const data = {
+                    tickers: document.getElementById('tickers').value.split(',').map(t => t.trim()),
+                    total_capital: parseFloat(document.getElementById('total_capital').value),
+                    num_long: parseInt(document.getElementById('num_long').value),
+                    num_short: parseInt(document.getElementById('num_short').value),
+                };
+
+                const response = await axios.post(`${API_BASE}/portfolio`, data);
+                const result = response.data;
+
+                if (result.success) {
+                    const portfolio = result.portfolio;
+                    const risk = result.risk_assessment;
+
+                    let html = `
+                        <div class="result-box">
+                            <h3><i class="fas fa-check-circle"></i> 포트폴리오 생성 완료</h3>
+                            <div class="grid-2">
+                                <div class="result-item">
+                                    <span class="result-label">시장 레짐</span>
+                                    <span class="result-value">${portfolio.regime}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">레짐 확신도</span>
+                                    <span class="result-value">${(portfolio.regime_confidence * 100).toFixed(1)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">롱 노출</span>
+                                    <span class="result-value positive">$${portfolio.total_long_exposure.toLocaleString()}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">숏 노출</span>
+                                    <span class="result-value negative">$${portfolio.total_short_exposure.toLocaleString()}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">순 노출</span>
+                                    <span class="result-value">${portfolio.net_exposure >= 0 ? '+' : ''}$${portfolio.net_exposure.toLocaleString()}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">예상 수익률</span>
+                                    <span class="result-value ${portfolio.expected_return >= 0 ? 'positive' : 'negative'}">${portfolio.expected_return.toFixed(2)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">샤프 비율</span>
+                                    <span class="result-value">${portfolio.sharpe_ratio.toFixed(2)}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">리스크 수준</span>
+                                    <span class="result-value ${risk.is_acceptable ? 'positive' : 'negative'}">${risk.overall_risk_level}</span>
+                                </div>
+                            </div>
+
+                            <h3 style="margin-top: 25px; margin-bottom: 15px;"><i class="fas fa-arrow-up"></i> 롱 포지션</h3>
+                            <table class="portfolio-table">
+                                <thead>
+                                    <tr>
+                                        <th>종목</th>
+                                        <th>비중</th>
+                                        <th>금액</th>
+                                        <th>주식수</th>
+                                        <th>알파 점수</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${portfolio.long_positions.map(p => `
+                                        <tr>
+                                            <td><span class="badge badge-long">LONG</span> ${p.symbol}</td>
+                                            <td>${p.weight.toFixed(1)}%</td>
+                                            <td>$${p.allocation.toLocaleString()}</td>
+                                            <td>${p.shares.toLocaleString()}</td>
+                                            <td>${p.alpha_score.toFixed(3)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+
+                            <h3 style="margin-top: 25px; margin-bottom: 15px;"><i class="fas fa-arrow-down"></i> 숏 포지션</h3>
+                            <table class="portfolio-table">
+                                <thead>
+                                    <tr>
+                                        <th>종목</th>
+                                        <th>비중</th>
+                                        <th>금액</th>
+                                        <th>주식수</th>
+                                        <th>알파 점수</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${portfolio.short_positions.map(p => `
+                                        <tr>
+                                            <td><span class="badge badge-short">SHORT</span> ${p.symbol}</td>
+                                            <td>${p.weight.toFixed(1)}%</td>
+                                            <td>$${p.allocation.toLocaleString()}</td>
+                                            <td>${p.shares.toLocaleString()}</td>
+                                            <td>${p.alpha_score.toFixed(3)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+
+                    resultDiv.innerHTML = html;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-box"><h3 style="color: var(--accent-red);">❌ 오류</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        async function runBacktest() {
+            const resultDiv = document.getElementById('backtest-result');
+            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>백테스트 실행 중...</p></div>';
+
+            try {
+                const data = {
+                    tickers: document.getElementById('backtest_tickers').value.split(',').map(t => t.trim()),
+                    start_date: document.getElementById('start_date').value,
+                    end_date: document.getElementById('end_date').value,
+                    initial_capital: parseFloat(document.getElementById('total_capital').value),
+                    rebalance_frequency: document.getElementById('rebalance_frequency').value,
+                };
+
+                const response = await axios.post(`${API_BASE}/backtest`, data);
+                const result = response.data;
+
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result-box">
+                            <h3><i class="fas fa-check-circle"></i> 백테스트 결과</h3>
+                            <div class="grid-2">
+                                <div class="result-item">
+                                    <span class="result-label">총 수익률</span>
+                                    <span class="result-value ${result.total_return >= 0 ? 'positive' : 'negative'}">${result.total_return.toFixed(2)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">연환산 수익률</span>
+                                    <span class="result-value ${result.annualized_return >= 0 ? 'positive' : 'negative'}">${result.annualized_return.toFixed(2)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">변동성</span>
+                                    <span class="result-value">${result.volatility.toFixed(2)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">샤프 비율</span>
+                                    <span class="result-value">${result.sharpe_ratio.toFixed(2)}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">소르티노 비율</span>
+                                    <span class="result-value">${result.sortino_ratio.toFixed(2)}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">최대 낙폭 (MDD)</span>
+                                    <span class="result-value negative">${result.max_drawdown.toFixed(2)}%</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">총 거래 횟수</span>
+                                    <span class="result-value">${result.total_trades}</span>
+                                </div>
+                                <div class="result-item">
+                                    <span class="result-label">승률</span>
+                                    <span class="result-value">${result.win_rate.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-box"><h3 style="color: var(--accent-red);">❌ 오류</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        // 오늘 날짜를 end_date 기본값으로 설정
+        document.getElementById('end_date').valueAsDate = new Date();
+
+        // 3개월 전 날짜를 start_date 기본값으로 설정
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        document.getElementById('start_date').valueAsDate = threeMonthsAgo;
+    </script>
+</body>
+</html>
