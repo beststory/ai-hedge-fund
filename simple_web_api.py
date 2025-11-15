@@ -119,15 +119,24 @@ class TradeRequest(BaseModel):
     quantity: int
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/index.html", response_class=HTMLResponse)
 async def root():
     """메인 페이지 (클라이언트 사이드에서 인증 체크)"""
     with open("web/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 @app.get("/login", response_class=HTMLResponse)
+@app.get("/login.html", response_class=HTMLResponse)
 async def login_page():
     """로그인 페이지"""
     with open("web/login.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/prediction-market", response_class=HTMLResponse)
+@app.get("/prediction", response_class=HTMLResponse)
+async def prediction_market_page():
+    """예측 시장 페이지"""
+    with open("web/prediction_market.html", "r", encoding="utf-8") as f:
         return f.read()
 
 @app.post("/api/auth/signup")
@@ -420,9 +429,12 @@ async def get_portfolio_suggestion(request: Dict[str, Any] = None):
     # 종목 리스트 (프론트엔드에서 전달되면 사용, 아니면 AI 추천 종목 사용)
     stocks_from_request = request.get("stocks", None)
 
-    # 캐시 조회 (total_investment + stocks로 1시간 캐싱)
+    # AI 엔진 선택 (기본값: ollama)
+    ai_engine = request.get("ai_engine", "ollama")
+
+    # 캐시 조회 (total_investment + stocks + ai_engine로 1시간 캐싱)
     stocks_key = ",".join(stocks_from_request) if stocks_from_request else "auto"
-    cache_params = {"total_investment": total_investment, "stocks": stocks_key}
+    cache_params = {"total_investment": total_investment, "stocks": stocks_key, "ai_engine": ai_engine}
     cached = cache_manager.get_cached("portfolio-suggestion", params=cache_params, ttl_seconds=3600)
     if cached:
         logger.info(f"✅ 캐시에서 포트폴리오 제안 반환 (투자금액: {total_investment:,}원)")
@@ -475,8 +487,8 @@ async def get_portfolio_suggestion(request: Dict[str, Any] = None):
             }
 
         # ✨ RAG 기반 포트폴리오 비중 결정 (블로그 인사이트 활용)
-        logger.info("\n🤖 RAG 기반 포트폴리오 제안 시작...")
-        rag_result = get_rag_based_portfolio(top_stocks, total_investment)
+        logger.info(f"\n🤖 RAG 기반 포트폴리오 제안 시작... (AI 엔진: {ai_engine})")
+        rag_result = get_rag_based_portfolio(top_stocks, total_investment, ai_engine=ai_engine)
 
         portfolio = rag_result['portfolio']
         market_outlook = rag_result['market_outlook']
@@ -2003,10 +2015,11 @@ async def get_asset_allocation(request: Dict[str, Any] = None):
     if request is None:
         request = {}
 
-    # 캐시 조회 (investment_amount + risk_tolerance로 1시간 캐싱)
+    # 캐시 조회 (investment_amount + risk_tolerance + ai_engine로 1시간 캐싱)
     investment_amount = request.get("investment_amount", 100000000)
     risk_tolerance = request.get("risk_tolerance", "보통")
-    cache_params = {"investment_amount": investment_amount, "risk_tolerance": risk_tolerance}
+    ai_engine = request.get("ai_engine", "ollama")
+    cache_params = {"investment_amount": investment_amount, "risk_tolerance": risk_tolerance, "ai_engine": ai_engine}
     cached = cache_manager.get_cached("asset-allocation", params=cache_params, ttl_seconds=3600)
     if cached:
         logger.info(f"✅ 캐시에서 자산 배분 제안 반환 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance})")
@@ -2017,10 +2030,10 @@ async def get_asset_allocation(request: Dict[str, Any] = None):
         from src.tools.forex_data import analyze_forex_market
         from src.tools.news_aggregator import analyze_geopolitical_risks
 
-        logger.info(f"🔄 자산 배분 제안 새로 계산 중 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance})")
+        logger.info(f"🔄 자산 배분 제안 새로 계산 중 (투자금액: {investment_amount:,}원, 리스크: {risk_tolerance}, AI 엔진: {ai_engine})")
 
         # 자산 배분 에이전트 실행
-        agent = get_asset_allocation_agent()
+        agent = get_asset_allocation_agent(ai_engine=ai_engine)
         recommendation = agent.generate_asset_allocation(
             investment_amount=investment_amount,
             risk_tolerance=risk_tolerance
@@ -2332,6 +2345,27 @@ async def iqc_backtest(request: IQCBacktestRequest):
         logger.error(f"백테스트 실패: {e}")
         raise HTTPException(status_code=500, detail=f"백테스트 실패: {str(e)}")
 
+
+# ==================== 예측 시장 (Prediction Market) API ====================
+from api_prediction_market import router as prediction_router
+
+# 라우터를 모든 엔드포인트에 Supabase 클라이언트를 주입하도록 래핑
+from functools import wraps
+
+def inject_supabase(func):
+    """Supabase 클라이언트를 자동 주입하는 데코레이터"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        kwargs['supabase_client'] = supabase
+        return await func(*args, **kwargs)
+    return wrapper
+
+# 모든 엔드포인트에 Supabase 주입
+for route in prediction_router.routes:
+    if hasattr(route, 'endpoint'):
+        route.endpoint = inject_supabase(route.endpoint)
+
+app.include_router(prediction_router)
 
 if __name__ == "__main__":
     import uvicorn
