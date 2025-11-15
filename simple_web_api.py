@@ -348,7 +348,7 @@ async def get_top_stocks_api():
     try:
         from src.tools.yahoo_finance import get_top_stocks
         logger.info("🔄 AI 추천 종목 새로 계산 중...")
-        top_stocks = get_top_stocks(5)
+        top_stocks = get_top_stocks(30)  # 글로벌 분산 투자: 미국 10, 일본 10, 중국 10
 
         result = {
             "success": True,
