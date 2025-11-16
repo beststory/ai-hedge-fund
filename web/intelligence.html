@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 투자 지능 시스템 | AI Hedge Fund</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #b0b0b0;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .tab-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .scenario-card {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .scenario-card:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .scenario-card.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        .scenario-type {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .scenario-type.optimistic {
+            background: #10b981;
+        }
+
+        .scenario-type.neutral {
+            background: #3b82f6;
+        }
+
+        .scenario-type.pessimistic {
+            background: #ef4444;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #667eea;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.05);
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .action-buy {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .action-sell {
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .allocation-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .allocation-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .metric-label {
+            color: #b0b0b0;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            color: #ef4444;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(-5px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">← 메인으로 돌아가기</a>
+
+        <header>
+            <h1>🧠 AI 투자 지능 시스템</h1>
+            <p class="subtitle">경제 분석 기반 시나리오 생성 및 자산 배분 최적화</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('scenarios')">투자 시나리오</button>
+            <button class="tab-button" onclick="showTab('portfolio')">포트폴리오</button>
+            <button class="tab-button" onclick="showTab('performance')">성과 분석</button>
+            <button class="tab-button" onclick="showTab('learning')">AI 학습</button>
+        </div>
+
+        <!-- 시나리오 탭 -->
+        <div id="scenarios-tab" class="tab-content active">
+            <div class="card">
+                <h2>📊 투자 시나리오 생성</h2>
+                <p style="margin-bottom: 20px; color: #b0b0b0;">
+                    현재 경제 상황을 분석하여 AI가 투자 시나리오를 생성합니다.
+                </p>
+                <button class="btn btn-primary" onclick="generateScenarios()">
+                    시나리오 생성 (3개)
+                </button>
+            </div>
+
+            <div id="scenarios-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p style="margin-top: 20px;">AI가 경제 지표를 분석하고 시나리오를 생성하고 있습니다...</p>
+            </div>
+
+            <div id="scenarios-list"></div>
+        </div>
+
+        <!-- 포트폴리오 탭 -->
+        <div id="portfolio-tab" class="tab-content">
+            <div class="card">
+                <h2>💼 현재 포트폴리오</h2>
+                <div id="current-portfolio-display"></div>
+            </div>
+
+            <div class="card">
+                <h2>🔄 리밸런싱 계획</h2>
+                <p style="margin-bottom: 20px; color: #b0b0b0;">
+                    시나리오를 선택하고 리밸런싱 계획을 확인하세요.
+                </p>
+                <div id="rebalancing-plan"></div>
+            </div>
+        </div>
+
+        <!-- 성과 분석 탭 -->
+        <div id="performance-tab" class="tab-content">
+            <div class="card">
+                <h2>📈 성과 분석</h2>
+                <p style="margin-bottom: 20px; color: #b0b0b0;">
+                    선택한 시나리오의 실제 성과를 분석합니다.
+                </p>
+                <div id="performance-results"></div>
+            </div>
+        </div>
+
+        <!-- AI 학습 탭 -->
+        <div id="learning-tab" class="tab-content">
+            <div class="card">
+                <h2>🤖 AI 모델 가중치</h2>
+                <p style="margin-bottom: 20px; color: #b0b0b0;">
+                    AI가 학습한 키워드 가중치를 확인할 수 있습니다.
+                </p>
+                <button class="btn btn-primary" onclick="loadAIWeights()">
+                    가중치 조회
+                </button>
+                <div id="ai-weights-display"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedScenario = null;
+        let token = null;
+
+        // 페이지 로드 시 토큰 확인
+        window.addEventListener('DOMContentLoaded', () => {
+            token = localStorage.getItem('token');
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
+            loadScenarios();
+            loadCurrentPortfolio();
+        });
+
+        // 탭 전환
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // API 호출 헬퍼
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(endpoint, options);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'API 호출 실패');
+            }
+
+            return await response.json();
+        }
+
+        // 시나리오 생성
+        async function generateScenarios() {
+            const loadingDiv = document.getElementById('scenarios-loading');
+            const listDiv = document.getElementById('scenarios-list');
+
+            loadingDiv.style.display = 'block';
+            listDiv.innerHTML = '';
+
+            try {
+                const result = await apiCall('/api/intelligence/scenarios/generate', 'POST', {
+                    num_scenarios: 3
+                });
+
+                loadingDiv.style.display = 'none';
+
+                if (result.success) {
+                    displayScenarios(result.scenarios);
+                    showSuccessMessage('시나리오 생성 완료!');
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                showErrorMessage('시나리오 생성 실패: ' + error.message);
+            }
+        }
+
+        // 시나리오 목록 로드
+        async function loadScenarios() {
+            try {
+                const result = await apiCall('/api/intelligence/scenarios/list');
+                if (result.success && result.scenarios.length > 0) {
+                    displayScenarios(result.scenarios);
+                }
+            } catch (error) {
+                console.error('시나리오 로드 실패:', error);
+            }
+        }
+
+        // 시나리오 표시
+        function displayScenarios(scenarios) {
+            const listDiv = document.getElementById('scenarios-list');
+            listDiv.innerHTML = '<div class="card"><h2>📋 생성된 시나리오</h2><div class="scenario-grid" id="scenario-grid"></div></div>';
+
+            const gridDiv = document.getElementById('scenario-grid');
+
+            scenarios.forEach(scenario => {
+                const card = document.createElement('div');
+                card.className = 'scenario-card';
+                card.onclick = () => selectScenario(scenario);
+
+                const typeClass = scenario.scenario_type === '낙관적' ? 'optimistic' :
+                                 scenario.scenario_type === '비관적' ? 'pessimistic' : 'neutral';
+
+                card.innerHTML = `
+                    <span class="scenario-type ${typeClass}">${scenario.scenario_type}</span>
+                    <h3 style="margin: 10px 0;">${scenario.scenario_name}</h3>
+                    <p style="color: #b0b0b0; margin-bottom: 15px;">${scenario.description || ''}</p>
+                    <div class="metric">
+                        <span class="metric-label">발생 확률</span>
+                        <span class="metric-value">${(scenario.probability * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">예상 수익률</span>
+                        <span class="metric-value">${scenario.expected_return?.toFixed(1) || 'N/A'}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">리스크 수준</span>
+                        <span class="metric-value">${scenario.risk_level}</span>
+                    </div>
+                `;
+
+                gridDiv.appendChild(card);
+            });
+        }
+
+        // 시나리오 선택
+        function selectScenario(scenario) {
+            selectedScenario = scenario;
+
+            document.querySelectorAll('.scenario-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+
+            showSuccessMessage(`"${scenario.scenario_name}" 시나리오 선택됨`);
+
+            // 포트폴리오 탭으로 전환하여 리밸런싱 계획 표시
+            showTab('portfolio');
+            loadRebalancingPlan(scenario.id);
+        }
+
+        // 현재 포트폴리오 로드
+        async function loadCurrentPortfolio() {
+            try {
+                const result = await apiCall('/api/intelligence/portfolio/current');
+                if (result.success && result.portfolio) {
+                    displayCurrentPortfolio(result.portfolio);
+                }
+            } catch (error) {
+                console.error('포트폴리오 로드 실패:', error);
+            }
+        }
+
+        // 포트폴리오 표시
+        function displayCurrentPortfolio(portfolio) {
+            const displayDiv = document.getElementById('current-portfolio-display');
+
+            if (!portfolio || portfolio.total_value === 0) {
+                displayDiv.innerHTML = '<p style="color: #b0b0b0;">포트폴리오 없음</p>';
+                return;
+            }
+
+            let html = `
+                <div class="metric">
+                    <span class="metric-label">총 가치</span>
+                    <span class="metric-value">$${portfolio.total_value.toLocaleString()}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">현금</span>
+                    <span class="metric-value">$${portfolio.cash_balance.toLocaleString()}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">리스크 성향</span>
+                    <span class="metric-value">${portfolio.risk_tolerance}</span>
+                </div>
+                <h3 style="margin-top: 20px; color: #667eea;">보유 종목</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>종목</th>
+                            <th>주식 수</th>
+                            <th>현재가</th>
+                            <th>평가액</th>
+                            <th>손익률</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            portfolio.holdings.forEach(holding => {
+                const pnlColor = holding.unrealized_pnl_pct >= 0 ? '#10b981' : '#ef4444';
+                html += `
+                    <tr>
+                        <td>${holding.ticker}</td>
+                        <td>${holding.shares.toFixed(2)}</td>
+                        <td>$${holding.current_price.toFixed(2)}</td>
+                        <td>$${holding.current_value.toLocaleString()}</td>
+                        <td style="color: ${pnlColor}">${holding.unrealized_pnl_pct.toFixed(2)}%</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            displayDiv.innerHTML = html;
+        }
+
+        // 리밸런싱 계획 로드
+        async function loadRebalancingPlan(scenarioId) {
+            // TODO: 실제 포트폴리오 데이터로 교체
+            const samplePortfolio = {
+                scenario_id: scenarioId,
+                total_value: 10000000,
+                cash_balance: 2000000,
+                holdings: [
+                    {ticker: "AAPL", shares: 10, avg_price: 150, current_price: 180, current_value: 1800000, weight_pct: 18},
+                    {ticker: "TSLA", shares: 15, avg_price: 200, current_price: 250, current_value: 3750000, weight_pct: 37.5}
+                ],
+                risk_tolerance: "보통"
+            };
+
+            try {
+                const result = await apiCall('/api/intelligence/portfolio/rebalance', 'POST', samplePortfolio);
+
+                if (result.success) {
+                    displayRebalancingPlan(result);
+                }
+            } catch (error) {
+                showErrorMessage('리밸런싱 계획 생성 실패: ' + error.message);
+            }
+        }
+
+        // 리밸런싱 계획 표시
+        function displayRebalancingPlan(plan) {
+            const planDiv = document.getElementById('rebalancing-plan');
+
+            let html = `
+                <div class="success">${plan.summary}</div>
+                <div class="metric">
+                    <span class="metric-label">예상 거래 비용</span>
+                    <span class="metric-value">$${plan.estimated_total_cost.toLocaleString()}</span>
+                </div>
+                <h3 style="margin-top: 20px; color: #667eea;">리밸런싱 액션</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>액션</th>
+                            <th>종목</th>
+                            <th>현재 주식 수</th>
+                            <th>목표 주식 수</th>
+                            <th>변경</th>
+                            <th>예상 비용</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            plan.actions.forEach(action => {
+                if (action.action === 'HOLD') return;
+
+                const actionClass = action.action === 'BUY' ? 'action-buy' : 'action-sell';
+                html += `
+                    <tr>
+                        <td class="${actionClass}">${action.action}</td>
+                        <td>${action.ticker}</td>
+                        <td>${action.current_shares.toFixed(2)}</td>
+                        <td>${action.target_shares.toFixed(2)}</td>
+                        <td>${action.shares_change > 0 ? '+' : ''}${action.shares_change.toFixed(2)}</td>
+                        <td>$${action.estimated_cost.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            planDiv.innerHTML = html;
+        }
+
+        // AI 가중치 로드
+        async function loadAIWeights() {
+            try {
+                const result = await apiCall('/api/intelligence/learning/weights');
+
+                if (result.success) {
+                    displayAIWeights(result.weights);
+                }
+            } catch (error) {
+                showErrorMessage('AI 가중치 조회 실패: ' + error.message);
+            }
+        }
+
+        // AI 가중치 표시
+        function displayAIWeights(weights) {
+            const displayDiv = document.getElementById('ai-weights-display');
+
+            let html = `
+                <table style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>키워드</th>
+                            <th>카테고리</th>
+                            <th>가중치</th>
+                            <th>성공/실패</th>
+                            <th>신뢰도</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            weights.forEach(weight => {
+                const successRate = weight.total_count > 0 ? (weight.success_count / weight.total_count * 100) : 0;
+                html += `
+                    <tr>
+                        <td>${weight.keyword}</td>
+                        <td>${weight.category}</td>
+                        <td>
+                            ${weight.weight.toFixed(2)}
+                            <div class="allocation-bar">
+                                <div class="allocation-fill" style="width: ${weight.weight * 100}%"></div>
+                            </div>
+                        </td>
+                        <td>${weight.success_count}/${weight.failure_count}</td>
+                        <td>${(weight.confidence * 100).toFixed(0)}%</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            displayDiv.innerHTML = html;
+        }
+
+        // 메시지 표시
+        function showSuccessMessage(message) {
+            // 기존 메시지 제거
+            document.querySelectorAll('.success, .error').forEach(el => el.remove());
+
+            const div = document.createElement('div');
+            div.className = 'success';
+            div.textContent = message;
+
+            document.querySelector('.container').insertBefore(div, document.querySelector('.tabs'));
+
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        function showErrorMessage(message) {
+            document.querySelectorAll('.success, .error').forEach(el => el.remove());
+
+            const div = document.createElement('div');
+            div.className = 'error';
+            div.textContent = message;
+
+            document.querySelector('.container').insertBefore(div, document.querySelector('.tabs'));
+
+            setTimeout(() => div.remove(), 5000);
+        }
+    </script>
+</body>
+</html>

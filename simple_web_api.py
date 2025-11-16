@@ -132,6 +132,14 @@ async def login_page():
     with open("web/login.html", "r", encoding="utf-8") as f:
         return f.read()
 
+
+@app.get("/intelligence", response_class=HTMLResponse)
+@app.get("/intelligence.html", response_class=HTMLResponse)
+async def intelligence_page():
+    """AI 투자 지능 시스템 페이지"""
+    with open("web/intelligence.html", "r", encoding="utf-8") as f:
+        return f.read()
+
 @app.get("/prediction-market", response_class=HTMLResponse)
 @app.get("/prediction", response_class=HTMLResponse)
 async def prediction_market_page():
@@ -2366,6 +2374,271 @@ for route in prediction_router.routes:
         route.endpoint = inject_supabase(route.endpoint)
 
 app.include_router(prediction_router)
+
+
+# ==================== AI 투자 지능 시스템 API ====================
+from src.intelligence.scenario_generator import ScenarioGenerator
+from src.intelligence.portfolio_optimizer import PortfolioOptimizer, UserPortfolio, Holding
+from src.intelligence.portfolio_tracker import PortfolioTracker
+from src.intelligence.performance_analyzer import PerformanceAnalyzer
+
+
+class ScenarioGenerateRequest(BaseModel):
+    """시나리오 생성 요청"""
+    num_scenarios: int = 3  # 생성할 시나리오 개수
+    focus_sectors: Optional[List[str]] = None  # 집중 분야
+
+
+class RebalancingRequest(BaseModel):
+    """리밸런싱 계획 요청"""
+    scenario_id: int  # 선택한 시나리오 ID
+    total_value: float  # 현재 포트폴리오 총 가치
+    cash_balance: float  # 현금 잔고
+    holdings: List[Dict]  # 보유 종목 [{ticker, shares, avg_price, current_price, current_value, weight_pct}]
+    risk_tolerance: str = "보통"  # 리스크 성향
+    total_investment: Optional[float] = None  # 목표 투자 금액
+
+
+class PerformanceAnalysisRequest(BaseModel):
+    """성과 분석 요청"""
+    scenario_id: int
+    days_to_evaluate: int = 90  # 평가 기간 (일)
+
+
+@app.post("/api/intelligence/scenarios/generate")
+async def generate_investment_scenarios(request: ScenarioGenerateRequest, user: Dict = Depends(verify_token)):
+    """AI 투자 시나리오 생성
+
+    경제 지표, 블로그 인사이트, 시장 트렌드를 분석하여
+    낙관적/중립적/비관적 시나리오 생성
+    """
+    try:
+        logger.info(f"📊 시나리오 생성 요청 (사용자: {user['user_id']}, 개수: {request.num_scenarios})")
+
+        generator = ScenarioGenerator()
+
+        # 시나리오 생성
+        analysis = await generator.generate_scenarios(
+            num_scenarios=request.num_scenarios,
+            focus_sectors=request.focus_sectors
+        )
+
+        # Supabase에 저장
+        scenario_ids = await generator.save_scenarios_to_db(analysis)
+
+        return {
+            "success": True,
+            "scenarios": [s.dict() for s in analysis.scenarios],
+            "scenario_ids": scenario_ids,
+            "economic_context": analysis.economic_context.dict(),
+            "market_sentiment": analysis.market_sentiment,
+            "generated_at": analysis.generated_at.isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 시나리오 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"시나리오 생성 실패: {str(e)}")
+
+
+@app.get("/api/intelligence/scenarios/list")
+async def list_active_scenarios(user: Dict = Depends(verify_token)):
+    """활성 시나리오 목록 조회"""
+    try:
+        result = supabase.table("investment_scenarios") \
+            .select("*") \
+            .eq("is_active", True) \
+            .order("generated_at", desc=True) \
+            .limit(10) \
+            .execute()
+
+        return {
+            "success": True,
+            "scenarios": result.data if result.data else []
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 시나리오 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"시나리오 조회 실패: {str(e)}")
+
+
+@app.get("/api/intelligence/scenarios/{scenario_id}")
+async def get_scenario_detail(scenario_id: int, user: Dict = Depends(verify_token)):
+    """특정 시나리오 상세 조회"""
+    try:
+        result = supabase.table("investment_scenarios") \
+            .select("*") \
+            .eq("id", scenario_id) \
+            .single() \
+            .execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="시나리오를 찾을 수 없습니다")
+
+        return {
+            "success": True,
+            "scenario": result.data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 시나리오 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"시나리오 조회 실패: {str(e)}")
+
+
+@app.post("/api/intelligence/portfolio/rebalance")
+async def get_rebalancing_plan(request: RebalancingRequest, user: Dict = Depends(verify_token)):
+    """리밸런싱 계획 생성
+
+    선택한 시나리오를 기반으로 현재 포트폴리오의 최적 리밸런싱 계획 제시
+    """
+    try:
+        logger.info(f"🔄 리밸런싱 계획 생성 (사용자: {user['user_id']}, 시나리오: {request.scenario_id})")
+
+        # 시나리오 조회
+        scenario_result = supabase.table("investment_scenarios") \
+            .select("*") \
+            .eq("id", request.scenario_id) \
+            .single() \
+            .execute()
+
+        if not scenario_result.data:
+            raise HTTPException(status_code=404, detail="시나리오를 찾을 수 없습니다")
+
+        scenario = scenario_result.data
+
+        # 현재 포트폴리오 구성
+        holdings = [
+            Holding(
+                ticker=h["ticker"],
+                shares=h["shares"],
+                avg_price=h["avg_price"],
+                current_price=h["current_price"],
+                current_value=h["current_value"],
+                weight_pct=h["weight_pct"]
+            )
+            for h in request.holdings
+        ]
+
+        current_portfolio = UserPortfolio(
+            total_value=request.total_value,
+            cash_balance=request.cash_balance,
+            holdings=holdings,
+            risk_tolerance=request.risk_tolerance
+        )
+
+        # 포트폴리오 최적화
+        optimizer = PortfolioOptimizer()
+
+        scenario_allocations = optimizer.parse_scenario_allocations(scenario)
+
+        plan = optimizer.generate_rebalancing_plan(
+            current_portfolio=current_portfolio,
+            scenario_allocations=scenario_allocations,
+            total_investment=request.total_investment
+        )
+
+        # Supabase에 저장
+        plan_id = await optimizer.save_rebalancing_plan_to_db(
+            user_id=user["user_id"],
+            scenario_id=request.scenario_id,
+            plan=plan,
+            current_portfolio=current_portfolio,
+            total_investment=request.total_investment or request.total_value
+        )
+
+        return {
+            "success": True,
+            "plan_id": plan_id,
+            "current_allocation": plan.current_allocation,
+            "target_allocation": plan.target_allocation,
+            "actions": [a.dict() for a in plan.actions],
+            "estimated_total_cost": plan.estimated_total_cost,
+            "estimated_new_value": plan.estimated_new_value,
+            "summary": plan.rebalancing_summary
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 리밸런싱 계획 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"리밸런싱 계획 생성 실패: {str(e)}")
+
+
+@app.get("/api/intelligence/portfolio/current")
+async def get_current_portfolio(user: Dict = Depends(verify_token)):
+    """현재 포트폴리오 조회"""
+    try:
+        tracker = PortfolioTracker(user_id=user["user_id"])
+        portfolio = await tracker.get_current_portfolio()
+
+        return {
+            "success": True,
+            "portfolio": portfolio
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 포트폴리오 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"포트폴리오 조회 실패: {str(e)}")
+
+
+@app.post("/api/intelligence/performance/analyze")
+async def analyze_scenario_performance(request: PerformanceAnalysisRequest, user: Dict = Depends(verify_token)):
+    """시나리오 성과 분석
+
+    선택한 시나리오의 실제 성과를 분석하고 AI 모델 가중치 업데이트
+    """
+    try:
+        logger.info(f"📈 성과 분석 요청 (사용자: {user['user_id']}, 시나리오: {request.scenario_id})")
+
+        analyzer = PerformanceAnalyzer()
+
+        # 성과 분석
+        performance = await analyzer.analyze_scenario_performance(
+            scenario_id=request.scenario_id,
+            user_id=user["user_id"],
+            selection_date=datetime.now(),
+            days_to_evaluate=request.days_to_evaluate
+        )
+
+        if not performance:
+            raise HTTPException(status_code=404, detail="성과 데이터를 찾을 수 없습니다")
+
+        # AI 학습
+        insights = await analyzer.update_ai_model_weights(performance)
+
+        return {
+            "success": True,
+            "performance": performance.dict(),
+            "learning_insights": [i.dict() for i in insights]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 성과 분석 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"성과 분석 실패: {str(e)}")
+
+
+@app.get("/api/intelligence/learning/weights")
+async def get_ai_weights(user: Dict = Depends(verify_token)):
+    """AI 모델 가중치 조회"""
+    try:
+        result = supabase.table("ai_model_weights") \
+            .select("*") \
+            .order("weight", desc=True) \
+            .limit(50) \
+            .execute()
+
+        return {
+            "success": True,
+            "weights": result.data if result.data else []
+        }
+
+    except Exception as e:
+        logger.error(f"❌ AI 가중치 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"AI 가중치 조회 실패: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

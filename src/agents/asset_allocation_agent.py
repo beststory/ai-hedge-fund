@@ -55,10 +55,11 @@ class AssetAllocationRecommendation(BaseModel):
 class AssetAllocationAgent:
     """자산 배분 AI 에이전트"""
 
-    def __init__(self):
+    def __init__(self, ai_engine: str = "ollama"):
         """초기화"""
         self.forex_collector = get_forex_collector()
         self.logger = logging.getLogger(__name__)
+        self.ai_engine = ai_engine
 
     def collect_macro_data(self) -> Dict:
         """
@@ -372,12 +373,9 @@ class AssetAllocationAgent:
 _asset_allocation_agent = None
 
 
-def get_asset_allocation_agent() -> AssetAllocationAgent:
-    """AssetAllocationAgent 싱글톤 인스턴스 반환"""
-    global _asset_allocation_agent
-    if _asset_allocation_agent is None:
-        _asset_allocation_agent = AssetAllocationAgent()
-    return _asset_allocation_agent
+def get_asset_allocation_agent(ai_engine: str = "ollama") -> AssetAllocationAgent:
+    """AssetAllocationAgent 인스턴스 생성 및 반환"""
+    return AssetAllocationAgent(ai_engine=ai_engine)
 
 
 # 편의 함수
